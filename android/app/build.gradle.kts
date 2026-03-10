@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.auditor"
+    namespace = "com.simfour.auditor"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "29.0.14206865"
 
