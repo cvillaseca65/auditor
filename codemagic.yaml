@@ -27,12 +27,21 @@ workflows:
 
       - name: Build IPA for App Store
         script: |
-          flutter build ipa --release --export-method app-store --output build/ios/ipa/App.ipa
+          flutter build ipa --release --export-method app-store
+          # Verifica que el IPA realmente se creó
+          if [ ! -f build/ios/ipa/*.ipa ]; then
+            echo "ERROR: No se generó App.ipa"
+            exit 1
+          fi
 
-      - name: Publish IPA with verbose logging
+      - name: Ensure logs folder exists
         script: |
           mkdir -p build/ios/ipa/logs
-          app-store-connect publish --path build/ios/ipa/App.ipa --verbose 2>&1 | tee build/ios/ipa/logs/publish.log
+
+      - name: Publish IPA to App Store Connect
+        script: |
+          ls build/ios/ipa
+          app-store-connect publish --path build/ios/ipa/*.ipa --verbose 2>&1 | tee build/ios/ipa/logs/publish.log
 
     artifacts:
       - build/ios/ipa/*.ipa
