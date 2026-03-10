@@ -15,8 +15,16 @@ workflows:
           flutter clean
           flutter pub get
 
-      - name: Build IPA
-        script: flutter build ipa --release --export-method app-store
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build IPA for App Store
+        script: |
+          flutter build ipa --release --export-method app-store
 
     artifacts:
       - build/ios/ipa/*.ipa
