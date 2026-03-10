@@ -27,20 +27,21 @@ workflows:
 
       - name: Build IPA for App Store
         script: |
-          flutter build ipa --release --export-method app-store
+          flutter build ipa --release --export-method app-store --no-codesign
 
-      - name: Ensure logs folder exists
+      - name: Inspect IPA
         script: |
           mkdir -p build/ios/ipa/logs
+          unzip -l build/ios/ipa/*.ipa | tee build/ios/ipa/logs/ipa_contents.log
 
       - name: Publish IPA to App Store Connect
         script: |
-          ls build/ios/ipa
+          mkdir -p build/ios/ipa/logs
           app-store-connect publish --path build/ios/ipa/*.ipa --verbose | tee build/ios/ipa/logs/publish.log
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/ipa/logs/publish.log
+      - build/ios/ipa/logs/*.log
 
     publishing:
       app_store_connect:
