@@ -15,7 +15,7 @@ workflows:
           flutter clean
           flutter pub get
 
-      - name: Set up code signing
+      - name: Install signing files
         script: |
           keychain initialize
           app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
