@@ -8,7 +8,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.simfour.auditor
-        team_id: MUR9C2Q24J
 
     scripts:
       - name: Get Flutter packages
