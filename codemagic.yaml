@@ -25,14 +25,38 @@ workflows:
           keychain add-certificates
           xcode-project use-profiles
 
+      - name: iOS Signing Diagnostic
+        script: |
+          mkdir -p build/ios/ipa/logs
+          echo "=== DIAGNOSTIC LOG START ===" > build/ios/ipa/logs/diagnostic.log
+
+          echo "=== CERTIFICATES IN KEYCHAIN ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          security find-identity -v -p codesigning | tee -a build/ios/ipa/logs/diagnostic.log
+
+          echo "=== LISTING P12 FILES ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          ls -l ~/Library/MobileDevice/Certificates/*.p12 2>/dev/null | tee -a build/ios/ipa/logs/diagnostic.log || echo "No P12 files found" | tee -a build/ios/ipa/logs/diagnostic.log
+
+          echo "=== LISTING PROVISIONING PROFILES ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          ls -l ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | tee -a build/ios/ipa/logs/diagnostic.log || echo "No provisioning profiles found" | tee -a build/ios/ipa/logs/diagnostic.log
+
+          echo "=== PROVISIONING PROFILE DETAILS ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+            echo "---- $profile ----" | tee -a build/ios/ipa/logs/diagnostic.log
+            security cms -D -i "$profile" | plutil -convert xml1 -o - - 2>/dev/null | tee -a build/ios/ipa/logs/diagnostic.log || echo "Could not parse $profile" | tee -a build/ios/ipa/logs/diagnostic.log
+          done
+
+          echo "=== FLUTTER INFO ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          flutter doctor -v | tee -a build/ios/ipa/logs/diagnostic.log
+
+          echo "=== XCODE ENV ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          xcodebuild -version | tee -a build/ios/ipa/logs/diagnostic.log
+          xcode-select -p | tee -a build/ios/ipa/logs/diagnostic.log
+
+          echo "=== DIAGNOSTIC LOG END ===" | tee -a build/ios/ipa/logs/diagnostic.log
+
       - name: Build IPA for App Store
         script: |
           flutter build ipa --release --export-method app-store
-          # Verifica que el IPA realmente se creó
-          if [ ! -f build/ios/ipa/*.ipa ]; then
-            echo "ERROR: No se generó App.ipa"
-            exit 1
-          fi
 
       - name: Ensure logs folder exists
         script: |
@@ -46,6 +70,7 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/ipa/logs/publish.log
+      - build/ios/ipa/logs/diagnostic.log
 
     publishing:
       app_store_connect:
