@@ -27,21 +27,38 @@ workflows:
 
       - name: Build IPA for App Store
         script: |
-          flutter build ipa --release --export-method app-store --no-codesign
+          echo "Cleaning and getting packages again"
+          flutter clean
+          flutter pub get
 
-      - name: Inspect IPA
+          echo "Building Flutter iOS app without code signing"
+          flutter build ios --release --no-codesign
+
+          echo "Archiving app with Xcode"
+          mkdir -p build/ios/archive
+          xcodebuild -workspace Runner.xcworkspace \
+                     -scheme Runner \
+                     -configuration Release \
+                     -archivePath build/ios/archive/Runner.xcarchive archive
+
+          echo "Exporting IPA using ExportOptions.plist"
+          mkdir -p build/ios/ipa
+          xcodebuild -exportArchive \
+                     -archivePath build/ios/archive/Runner.xcarchive \
+                     -exportOptionsPlist ExportOptions.plist \
+                     -exportPath build/ios/ipa
+
+          echo "IPA built at build/ios/ipa/App.ipa"
+          ls -l build/ios/ipa
+
+      - name: Publish IPA with verbose logging
         script: |
           mkdir -p build/ios/ipa/logs
-          unzip -l build/ios/ipa/*.ipa | tee build/ios/ipa/logs/ipa_contents.log
-
-      - name: Publish IPA to App Store Connect
-        script: |
-          mkdir -p build/ios/ipa/logs
-          app-store-connect publish --path build/ios/ipa/*.ipa --verbose | tee build/ios/ipa/logs/publish.log
+          app-store-connect publish --path build/ios/ipa/App.ipa --verbose 2>&1 | tee build/ios/ipa/logs/publish.log
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/ipa/logs/*.log
+      - build/ios/ipa/logs/publish.log
 
     publishing:
       app_store_connect:
