@@ -34,7 +34,13 @@ workflows:
 
       - name: Upload IPA to App Store Connect
         script: |
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
+          echo "Preparing App Store Connect API key..."
+
+          mkdir -p ~/.appstoreconnect/private_keys
+
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_IDENTIFIER.p8
+
+          echo "Uploading IPA to App Store Connect..."
 
           xcrun altool \
             --upload-app \
