@@ -1,6 +1,6 @@
 workflows:
   ios-workflow:
-    name: Build iOS → Upload TestFlight
+    name: Build iOS → Upload TestFlight (robust)
     max_build_duration: 60
 
     environment:
@@ -10,7 +10,6 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.simfour.auditor
 
-      # Variables de entorno que debes configurar en Codemagic
       vars:
         APP_STORE_CONNECT_ISSUER_ID: "2f594fd1-0323-44bb-8457-7e1575694497"
         APP_STORE_CONNECT_KEY_IDENTIFIER: "R97NT58B23"
@@ -38,23 +37,30 @@ workflows:
       - name: Build IPA
         script: |
           flutter build ipa --release
+          mkdir -p build/ios/ipa/logs
+
+      - name: IPA Diagnostics
+        script: |
+          echo "=== IPA FILES ===" | tee build/ios/ipa/logs/diagnostic.log
+          ls -lah build/ios/ipa | tee -a build/ios/ipa/logs/diagnostic.log
+
+          echo "=== IPA CONTENT (first 50 lines) ===" | tee -a build/ios/ipa/logs/diagnostic.log
+          unzip -l build/ios/ipa/*.ipa | head -50 | tee -a build/ios/ipa/logs/diagnostic.log
 
       - name: Upload IPA to TestFlight
         script: |
-          # Crear la carpeta de keys
           mkdir -p ~/.appstoreconnect/private_keys
-          
-          # Crear el archivo .p8 a partir de la variable de entorno
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey.p8
           chmod 600 ~/.appstoreconnect/private_keys/AuthKey.p8
 
-          # Subir la IPA
+          echo "=== Uploading IPA to TestFlight ===" | tee build/ios/ipa/logs/upload.log
           xcrun altool \
             --upload-app \
             --type ios \
             --file build/ios/ipa/*.ipa \
             --apiKey $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            --apiIssuer $APP_STORE_CONNECT_ISSUER_ID
+            --apiIssuer $APP_STORE_CONNECT_ISSUER_ID \
+            2>&1 | tee -a build/ios/ipa/logs/upload.log
 
       - name: Show IPA
         script: |
@@ -62,3 +68,5 @@ workflows:
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/ipa/logs/diagnostic.log
+      - build/ios/ipa/logs/upload.log
