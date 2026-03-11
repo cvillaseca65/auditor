@@ -33,24 +33,11 @@ workflows:
           echo "=== CERTIFICATES IN KEYCHAIN ===" | tee -a build/ios/ipa/logs/diagnostic.log
           security find-identity -v -p codesigning | tee -a build/ios/ipa/logs/diagnostic.log
 
-          echo "=== LISTING P12 FILES ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          ls -l ~/Library/MobileDevice/Certificates/*.p12 2>/dev/null | tee -a build/ios/ipa/logs/diagnostic.log || echo "No P12 files found" | tee -a build/ios/ipa/logs/diagnostic.log
-
           echo "=== LISTING PROVISIONING PROFILES ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          ls -l ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | tee -a build/ios/ipa/logs/diagnostic.log || echo "No provisioning profiles found" | tee -a build/ios/ipa/logs/diagnostic.log
-
-          echo "=== PROVISIONING PROFILE DETAILS ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
-            echo "---- $profile ----" | tee -a build/ios/ipa/logs/diagnostic.log
-            security cms -D -i "$profile" | plutil -convert xml1 -o - - 2>/dev/null | tee -a build/ios/ipa/logs/diagnostic.log || echo "Could not parse $profile" | tee -a build/ios/ipa/logs/diagnostic.log
-          done
+          ls -l ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | tee -a build/ios/ipa/logs/diagnostic.log
 
           echo "=== FLUTTER INFO ===" | tee -a build/ios/ipa/logs/diagnostic.log
           flutter doctor -v | tee -a build/ios/ipa/logs/diagnostic.log
-
-          echo "=== XCODE ENV ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          xcodebuild -version | tee -a build/ios/ipa/logs/diagnostic.log
-          xcode-select -p | tee -a build/ios/ipa/logs/diagnostic.log
 
           echo "=== DIAGNOSTIC LOG END ===" | tee -a build/ios/ipa/logs/diagnostic.log
 
@@ -58,11 +45,27 @@ workflows:
         script: |
           flutter build ipa --release --export-method app-store
 
+      # NUEVO PASO DE DIAGNOSTICO
+      - name: IPA Structure Diagnostic
+        script: |
+          echo "=== IPA FILES ==="
+          ls -lah build/ios/ipa
+
+          echo "=== IPA DETAILS ==="
+          file build/ios/ipa/*.ipa
+
+          echo "=== UNZIP IPA STRUCTURE ==="
+          mkdir ipa_check
+          unzip -q build/ios/ipa/*.ipa -d ipa_check
+
+          echo "=== IPA CONTENT ==="
+          ls -R ipa_check
+
       - name: Ensure logs folder exists
         script: |
           mkdir -p build/ios/ipa/logs
 
-      - name: Publish IPA to App Store Connect
+      - name: Publish IPA to App Store
         script: |
           ls build/ios/ipa
           app-store-connect publish --path build/ios/ipa/*.ipa --verbose 2>&1 | tee build/ios/ipa/logs/publish.log
