@@ -55,10 +55,15 @@ workflows:
 
       - name: Export IPA
         script: |
+          mkdir -p build/ios/ipa
+
           xcodebuild -exportArchive \
             -archivePath build/ios/archive/Runner.xcarchive \
             -exportOptionsPlist /Users/builder/export_options.plist \
             -exportPath build/ios/ipa
+
+          echo "=== IPA FILES ==="
+          ls -lah build/ios/ipa
 
       - name: List generated IPA files
         script: |
