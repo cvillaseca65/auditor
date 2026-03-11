@@ -43,10 +43,16 @@ workflows:
 
       - name: Build IPA for App Store
         script: |
-          flutter build ipa \
-            --release \
-            --export-options-plist /Users/builder/export_options.plist
+          flutter build ipa --release --export-options-plist /Users/builder/export_options.plist
 
+      - name: Check XCArchive structure
+        script: |
+          echo "=== XCARCHIVE ==="
+          ls -lah build/ios/archive
+
+          echo "=== ARCHIVE CONTENT ==="
+          ls -R build/ios/archive/Runner.xcarchive/Products/Applications
+          
       - name: IPA Structure Diagnostic
         script: |
           echo "=== IPA FILES ==="
