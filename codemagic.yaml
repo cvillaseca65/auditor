@@ -41,9 +41,24 @@ workflows:
 
           echo "=== DIAGNOSTIC LOG END ===" | tee -a build/ios/ipa/logs/diagnostic.log
 
-      - name: Build IPA for App Store
+      - name: Build iOS archive
         script: |
-          flutter build ipa --release --export-options-plist /Users/builder/export_options.plist
+          flutter build ios --release --no-codesign
+
+      - name: Create archive
+        script: |
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            archive
+
+      - name: Export IPA
+        script: |
+          xcodebuild -exportArchive \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            -exportOptionsPlist /Users/builder/export_options.plist \
+            -exportPath build/ios/ipa
 
       - name: Check XCArchive structure
         script: |
