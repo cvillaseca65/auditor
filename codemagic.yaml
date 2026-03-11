@@ -1,6 +1,6 @@
 workflows:
   ios-workflow:
-    name: iOS Build for App Store
+    name: iOS Build & Publish to TestFlight
     max_build_duration: 60
 
     integrations:
@@ -13,56 +13,32 @@ workflows:
         bundle_identifier: com.simfour.auditor
 
     scripts:
-
-      - name: Get Flutter packages
+      - name: Flutter clean & get packages
         script: |
           flutter clean
           flutter pub get
 
-      - name: Install signing files
+      - name: Install signing certificates and profiles
         script: |
           keychain initialize
           app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
           keychain add-certificates
           xcode-project use-profiles
 
-      - name: iOS Signing Diagnostic
-        script: |
-          mkdir -p build/ios/logs
-
-          echo "=== CERTIFICATES ===" > build/ios/logs/diagnostic.log
-          security find-identity -v -p codesigning >> build/ios/logs/diagnostic.log
-
-          echo "=== PROFILES ===" >> build/ios/logs/diagnostic.log
-          ls -l ~/Library/MobileDevice/Provisioning\ Profiles/ >> build/ios/logs/diagnostic.log
-
-          echo "=== FLUTTER INFO ===" >> build/ios/logs/diagnostic.log
-          flutter doctor -v >> build/ios/logs/diagnostic.log
-
-      - name: Build IPA
+      - name: Build IPA with Flutter
         script: |
           flutter build ipa --release
 
-      - name: Inspect generated IPA
+      - name: Verify generated IPA
         script: |
           echo "=== IPA FILES ==="
           ls -lah build/ios/ipa
 
-          echo "=== IPA CONTENT (first 120 lines) ==="
-          unzip -l build/ios/ipa/*.ipa | head -120
-
-      - name: Publish IPA
-        script: |
-          mkdir -p build/ios/logs
-          app-store-connect publish \
-            --path build/ios/ipa/*.ipa \
-            --verbose \
-            2>&1 | tee build/ios/logs/publish.log
+          echo "=== IPA STRUCTURE ==="
+          unzip -l build/ios/ipa/*.ipa | head -100
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/logs/publish.log
-      - build/ios/logs/diagnostic.log
 
     publishing:
       app_store_connect:
