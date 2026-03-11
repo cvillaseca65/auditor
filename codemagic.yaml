@@ -1,23 +1,27 @@
 workflows:
   ios-workflow:
-    name: Build iOS → TestFlight
+    name: Build iOS → Upload TestFlight
     max_build_duration: 60
-
-    integrations:
-      app_store_connect: codemagic
 
     environment:
       flutter: stable
+
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.simfour.auditor
 
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+
     scripts:
       - name: Get Flutter packages
         script: |
+          flutter clean
           flutter pub get
 
-      - name: Install signing
+      - name: Install signing files
         script: |
           keychain initialize
           app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
@@ -28,10 +32,20 @@ workflows:
         script: |
           flutter build ipa --release
 
+      - name: Upload IPA to App Store Connect
+        script: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
+
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file build/ios/ipa/*.ipa \
+            --apiKey $APP_STORE_CONNECT_KEY_IDENTIFIER \
+            --apiIssuer $APP_STORE_CONNECT_ISSUER_ID
+
+      - name: Show IPA
+        script: |
+          ls -lah build/ios/ipa
+
     artifacts:
       - build/ios/ipa/*.ipa
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
