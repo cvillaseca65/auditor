@@ -13,6 +13,7 @@ workflows:
         bundle_identifier: com.simfour.auditor
 
     scripts:
+
       - name: Get Flutter packages
         script: |
           flutter clean
@@ -27,86 +28,41 @@ workflows:
 
       - name: iOS Signing Diagnostic
         script: |
-          mkdir -p build/ios/ipa/logs
-          echo "=== DIAGNOSTIC LOG START ===" > build/ios/ipa/logs/diagnostic.log
+          mkdir -p build/ios/logs
 
-          echo "=== CERTIFICATES IN KEYCHAIN ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          security find-identity -v -p codesigning | tee -a build/ios/ipa/logs/diagnostic.log
+          echo "=== CERTIFICATES ===" > build/ios/logs/diagnostic.log
+          security find-identity -v -p codesigning >> build/ios/logs/diagnostic.log
 
-          echo "=== LISTING PROVISIONING PROFILES ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          ls -l ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | tee -a build/ios/ipa/logs/diagnostic.log
+          echo "=== PROFILES ===" >> build/ios/logs/diagnostic.log
+          ls -l ~/Library/MobileDevice/Provisioning\ Profiles/ >> build/ios/logs/diagnostic.log
 
-          echo "=== FLUTTER INFO ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          flutter doctor -v | tee -a build/ios/ipa/logs/diagnostic.log
+          echo "=== FLUTTER INFO ===" >> build/ios/logs/diagnostic.log
+          flutter doctor -v >> build/ios/logs/diagnostic.log
 
-          echo "=== DIAGNOSTIC LOG END ===" | tee -a build/ios/ipa/logs/diagnostic.log
-
-      - name: Build iOS archive
+      - name: Build IPA
         script: |
-          flutter build ios --release --no-codesign
+          flutter build ipa --release
 
-      - name: Create archive
-        script: |
-          xcodebuild -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath build/ios/archive/Runner.xcarchive \
-            archive
-
-      - name: Export IPA
-        script: |
-          mkdir -p build/ios/ipa
-
-          xcodebuild -exportArchive \
-            -archivePath build/ios/archive/Runner.xcarchive \
-            -exportOptionsPlist /Users/builder/export_options.plist \
-            -exportPath build/ios/ipa
-
-          echo "=== IPA FILES ==="
-          ls -lah build/ios/ipa
-
-      - name: Inspect exported IPA
-        script: |
-          echo "=== IPA CONTENT ==="
-          unzip -l build/ios/ipa/App.ipa | head -100
-
-      - name: List generated IPA files
+      - name: Inspect generated IPA
         script: |
           echo "=== IPA FILES ==="
           ls -lah build/ios/ipa
 
-          echo "=== FIND ALL IPA ==="
-          find . -name "*.ipa"
+          echo "=== IPA CONTENT (first 120 lines) ==="
+          unzip -l build/ios/ipa/*.ipa | head -120
 
-      - name: Check XCArchive structure
+      - name: Publish IPA
         script: |
-          echo "=== XCARCHIVE ==="
-          ls -lah build/ios/archive
-
-          echo "=== ARCHIVE CONTENT ==="
-          ls -R build/ios/archive/Runner.xcarchive/Products/Applications
-          
-      - name: IPA Structure Diagnostic
-        script: |
-          echo "=== IPA FILES ==="
-          ls -lah build/ios/ipa
-
-          echo "=== ZIP CONTENT ==="
-          unzip -l build/ios/ipa/*.ipa | head -200
-
-      - name: Ensure logs folder exists
-        script: |
-          mkdir -p build/ios/ipa/logs
-
-      - name: Publish IPA to App Store
-        script: |
-          ls build/ios/ipa
-          app-store-connect publish --path build/ios/ipa/*.ipa --verbose 2>&1 | tee build/ios/ipa/logs/publish.log
+          mkdir -p build/ios/logs
+          app-store-connect publish \
+            --path build/ios/ipa/*.ipa \
+            --verbose \
+            2>&1 | tee build/ios/logs/publish.log
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/ipa/logs/publish.log
-      - build/ios/ipa/logs/diagnostic.log
+      - build/ios/logs/publish.log
+      - build/ios/logs/diagnostic.log
 
     publishing:
       app_store_connect:
