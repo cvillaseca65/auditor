@@ -19,7 +19,8 @@ workflows:
       - name: Prepare logs
         script: |
           mkdir -p build/ios/ipa/logs
-          echo "=== START LOG ===" > build/ios/ipa/logs/full_build.log
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== START FULL BUILD LOG ===" > $LOGFILE
 
       - name: Get Flutter packages
         script: |
@@ -46,9 +47,9 @@ workflows:
       - name: Upload IPA to TestFlight
         script: |
           LOGFILE=build/ios/ipa/logs/full_build.log
-          echo "=== Upload IPA to App Store Connect ===" | tee -a $LOGFILE
+          echo "=== Upload IPA to TestFlight ===" | tee -a $LOGFILE
 
-          # Guardar la clave .p8 en un archivo físico
+          # Guardar la clave .p8 en un archivo temporal
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_key.p8
           chmod 600 ~/private_key.p8
           echo "Private key saved to ~/private_key.p8" | tee -a $LOGFILE
@@ -60,6 +61,13 @@ workflows:
             --apiKey $APP_STORE_CONNECT_KEY_IDENTIFIER \
             --apiIssuer $APP_STORE_CONNECT_ISSUER_ID \
             --private-key ~/private_key.p8 2>&1 | tee -a $LOGFILE
+
+      - name: Show IPA and logs
+        script: |
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== IPA FILES ===" | tee -a $LOGFILE
+          ls -lah build/ios/ipa | tee -a $LOGFILE
+          echo "=== FULL BUILD LOG END ===" | tee -a $LOGFILE
 
     artifacts:
       - build/ios/ipa/*.ipa
