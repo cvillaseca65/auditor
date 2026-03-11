@@ -1,6 +1,6 @@
 workflows:
   ios-workflow:
-    name: Build iOS → Upload TestFlight (robust)
+    name: Build iOS → TestFlight
     max_build_duration: 60
 
     environment:
@@ -11,62 +11,64 @@ workflows:
         bundle_identifier: com.simfour.auditor
 
       vars:
-        APP_STORE_CONNECT_ISSUER_ID: "2f594fd1-0323-44bb-8457-7e1575694497"
-        APP_STORE_CONNECT_KEY_IDENTIFIER: "R97NT58B23"
-        APP_STORE_CONNECT_PRIVATE_KEY: |
-          -----BEGIN PRIVATE KEY-----
-          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgob3ndJcXiXUclBXq
-          no+YWCP6TKkQsFuuFFSuWGBY9zqgCgYIKoZIzj0DAQehRANCAAQcanjyib4wQJrM
-          ugqjFj6Wa78TN/6ytQGj2sjXJVLDpbxZHEkXc8FHRfSJ5e4V2WRxEY5441Jx1Pf5
-          Pe+DXlJW
-          -----END PRIVATE KEY-----
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
 
     scripts:
+      - name: Prepare logs
+        script: |
+          mkdir -p build/ios/ipa/logs
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== START LOG ===" > $LOGFILE
+
       - name: Get Flutter packages
         script: |
-          flutter clean
-          flutter pub get
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== Flutter clean & pub get ===" | tee -a $LOGFILE
+          flutter clean 2>&1 | tee -a $LOGFILE
+          flutter pub get 2>&1 | tee -a $LOGFILE
 
       - name: Install signing files
         script: |
-          keychain initialize
-          app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
-          keychain add-certificates
-          xcode-project use-profiles
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== Install signing files ===" | tee -a $LOGFILE
+          keychain initialize 2>&1 | tee -a $LOGFILE
+          app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE 2>&1 | tee -a $LOGFILE
+          keychain add-certificates 2>&1 | tee -a $LOGFILE
+          xcode-project use-profiles 2>&1 | tee -a $LOGFILE
 
       - name: Build IPA
         script: |
-          flutter build ipa --release
-          mkdir -p build/ios/ipa/logs
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== Build IPA ===" | tee -a $LOGFILE
+          flutter build ipa --release 2>&1 | tee -a $LOGFILE
 
-      - name: IPA Diagnostics
+      - name: Show IPA contents
         script: |
-          echo "=== IPA FILES ===" | tee build/ios/ipa/logs/diagnostic.log
-          ls -lah build/ios/ipa | tee -a build/ios/ipa/logs/diagnostic.log
-
-          echo "=== IPA CONTENT (first 50 lines) ===" | tee -a build/ios/ipa/logs/diagnostic.log
-          unzip -l build/ios/ipa/*.ipa | head -50 | tee -a build/ios/ipa/logs/diagnostic.log
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== IPA FILES ===" | tee -a $LOGFILE
+          ls -lah build/ios/ipa 2>&1 | tee -a $LOGFILE
+          echo "=== IPA CONTENT ===" | tee -a $LOGFILE
+          unzip -l build/ios/ipa/*.ipa | head -200 2>&1 | tee -a $LOGFILE
 
       - name: Upload IPA to TestFlight
         script: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey.p8
-
-          echo "=== Uploading IPA to TestFlight ===" | tee build/ios/ipa/logs/upload.log
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== Upload IPA to App Store Connect ===" | tee -a $LOGFILE
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
           xcrun altool \
             --upload-app \
             --type ios \
             --file build/ios/ipa/*.ipa \
             --apiKey $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            --apiIssuer $APP_STORE_CONNECT_ISSUER_ID \
-            2>&1 | tee -a build/ios/ipa/logs/upload.log
+            --apiIssuer $APP_STORE_CONNECT_ISSUER_ID 2>&1 | tee -a $LOGFILE
 
-      - name: Show IPA
+      - name: End log
         script: |
-          ls -lah build/ios/ipa
+          LOGFILE=build/ios/ipa/logs/full_build.log
+          echo "=== END LOG ===" | tee -a $LOGFILE
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/ipa/logs/diagnostic.log
-      - build/ios/ipa/logs/upload.log
+      - build/ios/ipa/logs/full_build.log
