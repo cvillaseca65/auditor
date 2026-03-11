@@ -10,11 +10,17 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.simfour.auditor
 
+      # Variables de entorno que debes configurar en Codemagic
       vars:
-        # Debes definir estas variables en Codemagic
-        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
-        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+        APP_STORE_CONNECT_ISSUER_ID: "2f594fd1-0323-44bb-8457-7e1575694497"
+        APP_STORE_CONNECT_KEY_IDENTIFIER: "R97NT58B23"
+        APP_STORE_CONNECT_PRIVATE_KEY: |
+          -----BEGIN PRIVATE KEY-----
+          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgob3ndJcXiXUclBXq
+          no+YWCP6TKkQsFuuFFSuWGBY9zqgCgYIKoZIzj0DAQehRANCAAQcanjyib4wQJrM
+          ugqjFj6Wa78TN/6ytQGj2sjXJVLDpbxZHEkXc8FHRfSJ5e4V2WRxEY5441Jx1Pf5
+          Pe+DXlJW
+          -----END PRIVATE KEY-----
 
     scripts:
       - name: Get Flutter packages
@@ -33,17 +39,16 @@ workflows:
         script: |
           flutter build ipa --release
 
-      - name: Prepare App Store Connect API Key
-        script: |
-          # Crear carpeta para la clave privada
-          mkdir -p ~/.appstoreconnect/private_keys
-
-          # Guardar la variable en un archivo .p8 con el nombre exacto que usa altool
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_IDENTIFIER.p8
-          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_IDENTIFIER.p8
-
       - name: Upload IPA to TestFlight
         script: |
+          # Crear la carpeta de keys
+          mkdir -p ~/.appstoreconnect/private_keys
+          
+          # Crear el archivo .p8 a partir de la variable de entorno
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey.p8
+
+          # Subir la IPA
           xcrun altool \
             --upload-app \
             --type ios \
