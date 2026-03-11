@@ -29,10 +29,6 @@ workflows:
         script: |
           flutter build ipa --release
 
-      - name: Rename IPA
-        script: |
-          mv build/ios/ipa/App.ipa build/ios/ipa/Runner.ipa
-
       - name: Show IPA
         script: |
           ls -lah build/ios/ipa
@@ -44,3 +40,5 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
