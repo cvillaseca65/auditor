@@ -24,10 +24,9 @@ workflows:
 
       - name: Get Flutter packages
         script: |
-          LOGFILE=build/ios/ipa/logs/full_build.log
-          echo "=== Flutter clean & pub get ===" | tee -a $LOGFILE
-          flutter clean 2>&1 | tee -a $LOGFILE
-          flutter pub get 2>&1 | tee -a $LOGFILE
+          mkdir -p build/ios/ipa/logs
+          flutter clean | tee build/ios/ipa/logs/full_build.log
+          flutter pub get | tee -a build/ios/ipa/logs/full_build.log
 
       - name: Install signing files
         script: |
