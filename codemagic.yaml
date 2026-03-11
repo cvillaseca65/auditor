@@ -47,21 +47,13 @@ workflows:
             --release \
             --export-options-plist /Users/builder/export_options.plist
 
-      # NUEVO PASO DE DIAGNOSTICO
       - name: IPA Structure Diagnostic
         script: |
           echo "=== IPA FILES ==="
           ls -lah build/ios/ipa
 
-          echo "=== IPA DETAILS ==="
-          file build/ios/ipa/*.ipa
-
-          echo "=== UNZIP IPA STRUCTURE ==="
-          mkdir ipa_check
-          unzip -q build/ios/ipa/*.ipa -d ipa_check
-
-          echo "=== IPA CONTENT ==="
-          ls -R ipa_check
+          echo "=== ZIP CONTENT ==="
+          unzip -l build/ios/ipa/*.ipa | head -200
 
       - name: Ensure logs folder exists
         script: |
