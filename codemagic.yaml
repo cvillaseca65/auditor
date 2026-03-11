@@ -11,8 +11,8 @@ workflows:
         bundle_identifier: com.simfour.auditor
 
       vars:
-        APP_STORE_CONNECT_ISSUER_ID: R97NT58B23   # tu valor real
-        APP_STORE_CONNECT_KEY_IDENTIFIER: ec9ff855-ec3d-4f93-9ba7-a23821f39c52   # tu valor real
+        APP_STORE_CONNECT_ISSUER_ID: R97NT58B23
+        APP_STORE_CONNECT_KEY_IDENTIFIER: ec9ff855-ec3d-4f93-9ba7-a23821f39c52
         APP_STORE_CONNECT_PRIVATE_KEY: |
           -----BEGIN PRIVATE KEY-----
           MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgob3ndJcXiXUclBXq
@@ -28,8 +28,8 @@ workflows:
 
       - name: Get Flutter packages
         script: |
-          flutter clean | tee build/ios/ipa/logs/full_build.log
-          flutter pub get | tee -a build/ios/ipa/logs/full_build.log
+          flutter clean
+          flutter pub get
 
       - name: Install signing files
         script: |
@@ -40,7 +40,7 @@ workflows:
 
       - name: Build IPA
         script: |
-          flutter build ipa --release | tee -a build/ios/ipa/logs/full_build.log
+          flutter build ipa --release
 
       - name: Upload IPA to TestFlight
         script: |
@@ -50,7 +50,7 @@ workflows:
             --path build/ios/ipa/*.ipa \
             --api-key $APP_STORE_CONNECT_KEY_IDENTIFIER \
             --api-issuer $APP_STORE_CONNECT_ISSUER_ID \
-            --verbose | tee -a build/ios/ipa/logs/publish.log
+            --verbose
 
       - name: Show IPA and logs
         script: |
@@ -60,5 +60,3 @@ workflows:
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/ios/ipa/logs/full_build.log
-      - build/ios/ipa/logs/publish.log
