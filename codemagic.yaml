@@ -15,10 +15,9 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: |
-          flutter clean
           flutter pub get
 
-      - name: Install signing files
+      - name: Install signing
         script: |
           keychain initialize
           app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
@@ -28,19 +27,6 @@ workflows:
       - name: Build IPA
         script: |
           flutter build ipa --release
-
-      - name: Normalize IPA name
-        script: |
-          echo "=== IPA BEFORE ==="
-          ls -lah build/ios/ipa
-          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
-          mv "$IPA_PATH" build/ios/ipa/App.ipa
-          echo "=== IPA AFTER ==="
-          ls -lah build/ios/ipa
-
-      - name: Show IPA
-        script: |
-          ls -lah build/ios/ipa
 
     artifacts:
       - build/ios/ipa/*.ipa
