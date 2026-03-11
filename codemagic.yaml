@@ -60,6 +60,14 @@ workflows:
             -exportOptionsPlist /Users/builder/export_options.plist \
             -exportPath build/ios/ipa
 
+      - name: List generated IPA files
+        script: |
+          echo "=== IPA FILES ==="
+          ls -lah build/ios/ipa
+
+          echo "=== FIND ALL IPA ==="
+          find . -name "*.ipa"
+
       - name: Check XCArchive structure
         script: |
           echo "=== XCARCHIVE ==="
