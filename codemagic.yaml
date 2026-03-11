@@ -65,6 +65,11 @@ workflows:
           echo "=== IPA FILES ==="
           ls -lah build/ios/ipa
 
+      - name: Inspect exported IPA
+        script: |
+          echo "=== IPA CONTENT ==="
+          unzip -l build/ios/ipa/App.ipa | head -100
+
       - name: List generated IPA files
         script: |
           echo "=== IPA FILES ==="
