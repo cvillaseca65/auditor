@@ -16,16 +16,10 @@ workflows:
         APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
 
     scripts:
-      - name: Prepare logs and key
+      - name: Prepare logs
         script: |
           mkdir -p build/ios/ipa/logs
-          LOGFILE=build/ios/ipa/logs/full_build.log
-          echo "=== START LOG ===" > $LOGFILE
-
-          # Guardar la clave .p8 en un archivo físico
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_key.p8
-          chmod 600 ~/private_key.p8
-          echo "Private key saved to ~/private_key.p8" | tee -a $LOGFILE
+          echo "=== START LOG ===" > build/ios/ipa/logs/full_build.log
 
       - name: Get Flutter packages
         script: |
@@ -49,18 +43,15 @@ workflows:
           echo "=== Build IPA ===" | tee -a $LOGFILE
           flutter build ipa --release 2>&1 | tee -a $LOGFILE
 
-      - name: Show IPA contents
-        script: |
-          LOGFILE=build/ios/ipa/logs/full_build.log
-          echo "=== IPA FILES ===" | tee -a $LOGFILE
-          ls -lah build/ios/ipa 2>&1 | tee -a $LOGFILE
-          echo "=== IPA CONTENT ===" | tee -a $LOGFILE
-          unzip -l build/ios/ipa/*.ipa | head -200 2>&1 | tee -a $LOGFILE
-
       - name: Upload IPA to TestFlight
         script: |
           LOGFILE=build/ios/ipa/logs/full_build.log
           echo "=== Upload IPA to App Store Connect ===" | tee -a $LOGFILE
+
+          # Guardar la clave .p8 en un archivo físico
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_key.p8
+          chmod 600 ~/private_key.p8
+          echo "Private key saved to ~/private_key.p8" | tee -a $LOGFILE
 
           xcrun altool \
             --upload-app \
@@ -69,11 +60,6 @@ workflows:
             --apiKey $APP_STORE_CONNECT_KEY_IDENTIFIER \
             --apiIssuer $APP_STORE_CONNECT_ISSUER_ID \
             --private-key ~/private_key.p8 2>&1 | tee -a $LOGFILE
-
-      - name: End log
-        script: |
-          LOGFILE=build/ios/ipa/logs/full_build.log
-          echo "=== END LOG ===" | tee -a $LOGFILE
 
     artifacts:
       - build/ios/ipa/*.ipa
