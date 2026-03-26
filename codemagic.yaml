@@ -2,13 +2,8 @@ workflows:
   ios-workflow:
     name: Build iOS → TestFlight
     max_build_duration: 120
-
     environment:
       flutter: stable
-
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.simfour.auditor
 
       vars:
         # IMPORTANT:
@@ -37,7 +32,7 @@ workflows:
       - name: Install signing files
         script: |
           keychain initialize
-          app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE
+          app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE --create --delete-stale-profiles
           keychain add-certificates
           xcode-project use-profiles
 
