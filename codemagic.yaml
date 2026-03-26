@@ -11,19 +11,11 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.simfour.auditor
 
-      vars:
-        # IMPORTANT:
-        # - APP_STORE_CONNECT_KEY_IDENTIFIER must be the 10-char Key ID
-        # - APP_STORE_CONNECT_ISSUER_ID must be the UUID Issuer ID
-        APP_STORE_CONNECT_KEY_IDENTIFIER: R97NT58B23
-        APP_STORE_CONNECT_ISSUER_ID: ec9ff855-ec3d-4f93-9ba7-a23821f39c52
-        APP_STORE_CONNECT_PRIVATE_KEY: |
-          -----BEGIN PRIVATE KEY-----
-          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgob3ndJcXiXUclBXq
-          no+YWCP6TKkQsFuuFFSuWGBY9zqgCgYIKoZIzj0DAQehRANCAAQcanjyib4wQJrM
-          ugqjFj6Wa78TN/6ytQGj2sjXJVLDpbxZHEkXc8FHRfSJ5e4V2WRxEY5441Jx1Pf5
-          Pe+DXlJW
-          -----END PRIVATE KEY-----
+    # Recomendado: usar la integración de Codemagic (evita pedir variables de entorno en YAML).
+    # En Codemagic UI, Team settings -> Integrations -> App Store Connect -> "Add key"
+    # y pon aquí el "API key name" exactamente como esté en Codemagic.
+    integrations:
+      app_store_connect: YOUR_APP_STORE_CONNECT_API_KEY_NAME
 
     scripts:
       - name: Create build logs folder
@@ -45,12 +37,9 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        auth: integration
 
-        # Post-processing (no requiere mac):
-        # Envía el build para revisión en App Store.
+        # Envía el build para revisión en App Store (post-processing, sin mac).
         submit_to_app_store: true
 
     artifacts:
