@@ -1,7 +1,7 @@
 workflows:
   ios-workflow:
     name: Build iOS → TestFlight
-    max_build_duration: 60
+    max_build_duration: 120
 
     environment:
       flutter: stable
@@ -47,12 +47,16 @@ workflows:
 
       - name: Upload IPA to TestFlight
         script: |
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > private_key.p8
+          mkdir -p private_keys
+          # app-store-connect expects AuthKey_<KEY_ID>.p8 in the private_keys folder
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
 
           app-store-connect publish \
             --path build/ios/ipa/*.ipa \
-            --api-key $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            --api-issuer $APP_STORE_CONNECT_ISSUER_ID \
+            --testflight \
+            --issuer-id $APP_STORE_CONNECT_ISSUER_ID \
+            --key-id $APP_STORE_CONNECT_KEY_IDENTIFIER \
+            --private-key "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
             --verbose
 
       - name: Show IPA and logs
