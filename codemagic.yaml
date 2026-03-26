@@ -5,6 +5,12 @@ workflows:
     environment:
       flutter: stable
 
+      # Usa los certificados/perfiles que hayas subido en Codemagic UI
+      # (Code signing identities). Se emparejan por bundle id y tipo.
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.simfour.auditor
+
       vars:
         # IMPORTANT:
         # - APP_STORE_CONNECT_KEY_IDENTIFIER must be the 10-char Key ID
@@ -20,45 +26,27 @@ workflows:
           -----END PRIVATE KEY-----
 
     scripts:
-      - name: Ensure logs folder exists
-        script: |
-          mkdir -p build/ios/ipa/logs
-
       - name: Get Flutter packages
         script: |
           flutter clean
           flutter pub get
 
-      - name: Install signing files
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files com.simfour.auditor --type IOS_APP_STORE --create --delete-stale-profiles
-          keychain add-certificates
-          xcode-project use-profiles
+      - name: Apply provisioning profiles
+        script: xcode-project use-profiles
 
       - name: Build IPA
         script: |
           flutter build ipa --release
 
-      - name: Upload IPA to TestFlight
-        script: |
-          mkdir -p private_keys
-          # app-store-connect expects AuthKey_<KEY_ID>.p8 in the private_keys folder
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
 
-          app-store-connect publish \
-            --path build/ios/ipa/*.ipa \
-            --testflight \
-            --issuer-id $APP_STORE_CONNECT_ISSUER_ID \
-            --key-id $APP_STORE_CONNECT_KEY_IDENTIFIER \
-            --private-key "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
-            --verbose
-
-      - name: Show IPA and logs
-        script: |
-          ls -lah build/ios/ipa
-          echo "=== Logs ==="
-          ls -lah build/ios/ipa/logs
+        # Post-processing (no requiere mac):
+        # publicará el build a TestFlight.
+        submit_to_testflight: true
 
     artifacts:
       - build/ios/ipa/*.ipa
