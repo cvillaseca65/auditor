@@ -1,6 +1,6 @@
 workflows:
   ios-workflow:
-    name: Build iOS → TestFlight
+    name: Build iOS → App Store
     max_build_duration: 120
     environment:
       flutter: stable
@@ -26,17 +26,22 @@ workflows:
           -----END PRIVATE KEY-----
 
     scripts:
+      - name: Create build logs folder
+        script: |
+          mkdir -p build/logs
+
       - name: Get Flutter packages
         script: |
           flutter clean
           flutter pub get
 
       - name: Apply provisioning profiles
-        script: xcode-project use-profiles
+        script: xcode-project use-profiles 2>&1 | tee build/logs/use-profiles.log
 
       - name: Build IPA
         script: |
-          flutter build ipa --release
+          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist 2>&1 | tee build/logs/ipa-build.log
+          ls -lah build/ios/ipa | tee build/logs/ipa-list.log
 
     publishing:
       app_store_connect:
@@ -45,8 +50,9 @@ workflows:
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
 
         # Post-processing (no requiere mac):
-        # publicará el build a TestFlight.
-        submit_to_testflight: true
+        # Envía el build para revisión en App Store.
+        submit_to_app_store: true
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/logs/**/*
