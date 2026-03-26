@@ -11,8 +11,11 @@ workflows:
         bundle_identifier: com.simfour.auditor
 
       vars:
-        APP_STORE_CONNECT_ISSUER_ID: R97NT58B23
-        APP_STORE_CONNECT_KEY_IDENTIFIER: ec9ff855-ec3d-4f93-9ba7-a23821f39c52
+        # IMPORTANT:
+        # - APP_STORE_CONNECT_KEY_IDENTIFIER must be the 10-char Key ID
+        # - APP_STORE_CONNECT_ISSUER_ID must be the UUID Issuer ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: R97NT58B23
+        APP_STORE_CONNECT_ISSUER_ID: ec9ff855-ec3d-4f93-9ba7-a23821f39c52
         APP_STORE_CONNECT_PRIVATE_KEY: |
           -----BEGIN PRIVATE KEY-----
           MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgob3ndJcXiXUclBXq
