@@ -29,8 +29,9 @@ workflows:
     max_build_duration: 120
     environment:
       flutter: stable
-      # Ver versiones: https://docs.codemagic.io/specs-macos/xcode-16-4/
-      xcode: 16.4
+      # iOS 26 SDK (Xcode 26) — requisito Apple para subir a partir del 28 abr 2026 (ITMS-90725).
+      # https://docs.codemagic.io/specs-macos/xcode-26-0/
+      xcode: 26.0
       groups:
         - group
       ios_signing:
