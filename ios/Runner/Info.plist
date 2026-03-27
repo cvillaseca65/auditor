@@ -26,6 +26,8 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Auditor necesita acceso a la cámara para adjuntar fotos en las auditorías cuando elijas tomar una imagen.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
