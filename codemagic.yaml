@@ -33,13 +33,28 @@ workflows:
       - name: Publish IPA to App Store Connect (verbose)
         script: |
           mkdir -p build/logs private_keys
-          # Prefer base64-encoded key to avoid multiline/CRLF issues in CI variables.
-          # Fallback to APP_STORE_CONNECT_PRIVATE_KEY if BASE64 var is not set.
-          if [ -n "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" ]; then
-            echo "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" | base64 --decode | tr -d '\r' > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
-          else
-            printf "%b" "$APP_STORE_CONNECT_PRIVATE_KEY" | tr -d '\r' > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
-          fi
+          # Robust key normalization without locale-sensitive tools (tr can fail on macOS locale).
+          python3 - <<'PY'
+          import base64, os
+          key_id = os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]
+          out_path = f"private_keys/AuthKey_{key_id}.p8"
+          key_b64 = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY_BASE64", "").strip()
+          key_raw = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY", "")
+
+          if key_b64:
+              data = base64.b64decode(key_b64)
+              text = data.decode("utf-8", errors="strict")
+          else:
+              text = key_raw.replace("\\n", "\n")
+
+          text = text.replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
+          if "-----BEGIN PRIVATE KEY-----" not in text or "-----END PRIVATE KEY-----" not in text:
+              raise SystemExit("Invalid APP_STORE_CONNECT_PRIVATE_KEY(_BASE64): missing PEM markers")
+
+          with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+              f.write(text)
+          print(f"Saved normalized key to {out_path}")
+          PY
           app-store-connect publish \
             --path "build/ios/ipa/*.ipa" \
             --app-store \
