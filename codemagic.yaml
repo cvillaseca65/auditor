@@ -33,7 +33,13 @@ workflows:
       - name: Publish IPA to App Store Connect (verbose)
         script: |
           mkdir -p build/logs private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
+          # Prefer base64-encoded key to avoid multiline/CRLF issues in CI variables.
+          # Fallback to APP_STORE_CONNECT_PRIVATE_KEY if BASE64 var is not set.
+          if [ -n "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" ]; then
+            echo "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" | base64 --decode | tr -d '\r' > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
+          else
+            printf "%b" "$APP_STORE_CONNECT_PRIVATE_KEY" | tr -d '\r' > "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
+          fi
           app-store-connect publish \
             --path "build/ios/ipa/*.ipa" \
             --app-store \
