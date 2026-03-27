@@ -66,6 +66,8 @@ workflows:
     publishing:
       app_store_connect:
         # Misma forma que en la doc de variables de entorno (no uses auth: integration a la vez).
+        # En el log, Codemagic puede mostrar --private-key @env:APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY;
+        # es la clave inyectada desde tu secreto (p. ej. APP_STORE_CONNECT_PRIVATE_KEY). Éxito = "UPLOAD SUCCEEDED".
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
