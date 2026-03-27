@@ -33,27 +33,52 @@ workflows:
       - name: Publish IPA to App Store Connect (verbose)
         script: |
           mkdir -p build/logs private_keys
-          # Robust key normalization without locale-sensitive tools (tr can fail on macOS locale).
+          # Write .p8 from env: BASE64 (strip whitespace, fix padding) or raw PEM (multiline / \\n).
           python3 - <<'PY'
-          import base64, os
+          import base64, os, re, sys
+
           key_id = os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]
           out_path = f"private_keys/AuthKey_{key_id}.p8"
-          key_b64 = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY_BASE64", "").strip()
-          key_raw = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY", "")
+          key_b64 = (os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY_BASE64") or "").strip()
+          key_raw = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY") or ""
 
-          if key_b64:
-              data = base64.b64decode(key_b64)
-              text = data.decode("utf-8", errors="strict")
-          else:
+          def pem_from_bytes(data: bytes) -> str:
+              for enc in ("utf-8", "ascii", "latin-1"):
+                  try:
+                      t = data.decode(enc)
+                  except UnicodeDecodeError:
+                      continue
+                  if "BEGIN PRIVATE KEY" in t and "END PRIVATE KEY" in t:
+                      return t
+              raise SystemExit(
+                  "BASE64 decodes to bytes that are not a valid PEM text. "
+                  "Regenerate: PowerShell [Convert]::ToBase64String([IO.File]::ReadAllBytes('AuthKey_....p8')) "
+                  "and paste ONE line, no quotes, in APP_STORE_CONNECT_PRIVATE_KEY_BASE64."
+              )
+
+          text = None
+          if key_b64.startswith("-----BEGIN"):
+              text = key_b64
+          elif key_b64:
+              b64 = re.sub(r"\s+", "", key_b64)
+              pad = "=" * ((4 - len(b64) % 4) % 4)
+              try:
+                  data = base64.b64decode(b64 + pad, validate=False)
+              except Exception as e:
+                  raise SystemExit(f"Invalid base64 in APP_STORE_CONNECT_PRIVATE_KEY_BASE64: {e}") from e
+              text = pem_from_bytes(data)
+          elif key_raw:
               text = key_raw.replace("\\n", "\n")
+          else:
+              sys.exit("Set APP_STORE_CONNECT_PRIVATE_KEY_BASE64 or APP_STORE_CONNECT_PRIVATE_KEY in Codemagic.")
 
           text = text.replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
           if "-----BEGIN PRIVATE KEY-----" not in text or "-----END PRIVATE KEY-----" not in text:
-              raise SystemExit("Invalid APP_STORE_CONNECT_PRIVATE_KEY(_BASE64): missing PEM markers")
+              raise SystemExit("PEM must contain BEGIN/END PRIVATE KEY lines.")
 
           with open(out_path, "w", encoding="utf-8", newline="\n") as f:
               f.write(text)
-          print(f"Saved normalized key to {out_path}")
+          print("Saved", out_path, "OK")
           PY
           app-store-connect publish \
             --path "build/ios/ipa/*.ipa" \
