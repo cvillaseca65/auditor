@@ -5,7 +5,7 @@ workflows:
     environment:
       flutter: stable
       groups:
-        - appstore_credentials
+        - group
 
       # Usa los certificados/perfiles que hayas subido en Codemagic UI
       # (Code signing identities). Se emparejan por bundle id y tipo.
