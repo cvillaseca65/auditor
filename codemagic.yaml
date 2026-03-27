@@ -14,20 +14,19 @@ workflows:
         bundle_identifier: com.simfour.auditor
 
     scripts:
-      - name: Create build logs folder
-        script: |
-          mkdir -p build/logs
-
       - name: Get Flutter packages
         script: |
           flutter clean
           flutter pub get
 
       - name: Apply provisioning profiles
-        script: xcode-project use-profiles 2>&1 | tee build/logs/use-profiles.log
+        script: |
+          mkdir -p build/logs
+          xcode-project use-profiles 2>&1 | tee build/logs/use-profiles.log
 
       - name: Build IPA
         script: |
+          mkdir -p build/logs
           flutter build ipa --release --export-options-plist=ios/ExportOptions.plist 2>&1 | tee build/logs/ipa-build.log
           ls -lah build/ios/ipa | tee build/logs/ipa-list.log
 
