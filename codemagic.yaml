@@ -80,12 +80,15 @@ workflows:
               f.write(text)
           print("Saved", out_path, "OK")
           PY
+          KEYFILE="private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
+          # Must use @file: or the CLI treats the argument as inline PEM text (not a path).
+          openssl pkey -in "$KEYFILE" -noout -text >> build/logs/key-openssl-check.log 2>&1 || true
           app-store-connect publish \
             --path "build/ios/ipa/*.ipa" \
             --app-store \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            --private-key "private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
+            --private-key "@file:${KEYFILE}" \
             --verbose 2>&1 | tee build/logs/appstore-publish.log
 
     artifacts:
