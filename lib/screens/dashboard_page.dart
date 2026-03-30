@@ -9,7 +9,10 @@ import 'lines_page.dart';
 enum ViewLevel { companies, audits, plans }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({super.key, this.showMenuBack = false});
+
+  /// Si es true (viene del menú post-login), en el nivel compañías muestra volver al menú.
+  final bool showMenuBack;
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -33,6 +36,12 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     fetchData();
+  }
+
+  static int _compareMapsByName(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final na = '${a['name'] ?? ''}'.toLowerCase();
+    final nb = '${b['name'] ?? ''}'.toLowerCase();
+    return na.compareTo(nb);
   }
 
   String formatDate(String? dateString) {
@@ -107,14 +116,17 @@ class _DashboardPageState extends State<DashboardPage> {
           case ViewLevel.companies:
             companies =
                 data.map((e) => Map<String, dynamic>.from(e)).toList();
+            companies.sort(_compareMapsByName);
             break;
           case ViewLevel.audits:
             audits =
                 data.map((e) => Map<String, dynamic>.from(e)).toList();
+            audits.sort(_compareMapsByName);
             break;
           case ViewLevel.plans:
             plans =
                 data.map((e) => Map<String, dynamic>.from(e)).toList();
+            plans.sort(_compareMapsByName);
             break;
         }
       } else if (response.statusCode == 401) {
@@ -258,7 +270,12 @@ class _DashboardPageState extends State<DashboardPage> {
                   });
                 },
               )
-            : null,
+            : widget.showMenuBack
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.of(context).pop(),
+                  )
+                : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),

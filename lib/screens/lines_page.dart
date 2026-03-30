@@ -57,6 +57,11 @@ class _LinesPageState extends State<LinesPage> {
         final data = jsonDecode(response.body);
         planFull = data;
         lines = List<Map<String, dynamic>>.from(data['lines'] ?? []);
+        lines.sort((a, b) {
+          final na = '${a['name'] ?? ''}'.toLowerCase();
+          final nb = '${b['name'] ?? ''}'.toLowerCase();
+          return na.compareTo(nb);
+        });
       } else {
         error = 'Error ${response.statusCode}';
       }
