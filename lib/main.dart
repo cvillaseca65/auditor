@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AUDITOR',
+      title: 'Inicio',
       theme: SimTheme.theme,
       debugShowCheckedModeBanner: false,
       home: const LoginPage(),

@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config.dart';
+import '../services/pending_audit_plans_service.dart';
+import 'hallazgos_create_page.dart';
 import 'post_login_menu_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -52,12 +54,31 @@ class _LoginPageState extends State<LoginPage> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', accessToken);
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const PostLoginMenuPage(),
-          ),
-        );
+        var hasPendingAudits = false;
+        try {
+          hasPendingAudits =
+              await PendingAuditPlansService.userHasPendingPlans(accessToken);
+        } catch (_) {
+          hasPendingAudits = false;
+        }
+
+        if (!mounted) return;
+
+        if (hasPendingAudits) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const PostLoginMenuPage(),
+            ),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const HallazgosCreatePage(),
+            ),
+          );
+        }
       } else {
         setState(() {
           _error = 'Credenciales incorrectas (${response.statusCode})';
@@ -94,14 +115,6 @@ class _LoginPageState extends State<LoginPage> {
               Image.asset(
                 'assets/images/logo.png',
                 height: 120,
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'AUDITOR',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w600,
-                ),
               ),
               const SizedBox(height: 40),
               TextField(

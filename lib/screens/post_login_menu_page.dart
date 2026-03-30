@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/sim_theme.dart';
 import '../services/pending_audit_plans_service.dart';
 import 'dashboard_page.dart';
 import 'hallazgos_create_page.dart';
@@ -16,7 +17,6 @@ class PostLoginMenuPage extends StatefulWidget {
 
 class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
   bool _loading = true;
-  bool _hasPendingAuditPlans = false;
 
   @override
   void initState() {
@@ -35,7 +35,7 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
       return;
     }
 
-    bool pending = false;
+    var pending = false;
     try {
       pending = await PendingAuditPlansService.userHasPendingPlans(token);
     } catch (_) {
@@ -43,10 +43,15 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
     }
 
     if (!mounted) return;
-    setState(() {
-      _hasPendingAuditPlans = pending;
-      _loading = false;
-    });
+
+    if (!pending) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HallazgosCreatePage()),
+      );
+      return;
+    }
+
+    setState(() => _loading = false);
   }
 
   Future<void> _logout() async {
@@ -63,7 +68,7 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Auditor'),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -73,57 +78,121 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          final created = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const HallazgosCreatePage(),
+          : SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Bienvenido. ¿Qué quieres hacer hoy?',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
+                            ) ??
+                            const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
                             ),
-                          );
-                          if (!context.mounted) return;
-                          if (created == true) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Hallazgo creado exitosamente',
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        child: const Text('Hallazgos'),
                       ),
-                    ),
-                    if (_hasPendingAuditPlans) ...[
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const DashboardPage(
-                                  showMenuBack: true,
+                      const SizedBox(height: 36),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                        SizedBox(
+                          height: 44,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF16A34A),
+                              foregroundColor: Colors.white,
+                              elevation: 2,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: () async {
+                              final created = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const HallazgosCreatePage(),
+                                ),
+                              );
+                              if (!context.mounted) return;
+                              if (created == true) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Hallazgo creado exitosamente',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Hallazgos',
+                                style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.1,
                                 ),
                               ),
-                            );
-                          },
-                          child: const Text('Auditoría'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 36),
+                        SizedBox(
+                          height: 44,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: SimTheme.accentColor,
+                              foregroundColor: Colors.white,
+                              elevation: 2,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const DashboardPage(
+                                    showMenuBack: true,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Auditoría',
+                                style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                          ],
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

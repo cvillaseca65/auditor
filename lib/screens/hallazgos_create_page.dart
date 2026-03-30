@@ -224,7 +224,16 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hallazgo creado exitosamente'),
+          ),
+        );
+        _resetAfterSuccessfulCreate();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -241,6 +250,50 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
         .toList();
     list.sort(IdTitle.compareAlphabetic);
     return list;
+  }
+
+  Future<void> _logoutToLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
+  void _resetAfterSuccessfulCreate() {
+    setState(() {
+      _findingController.clear();
+      _attachments.clear();
+      _date = DateTime.now();
+      _locationId = null;
+      _involvedUserIds.clear();
+      _involvedTitles.clear();
+      _originId = null;
+      _areaId = null;
+    });
+    final cid = _companyId;
+    final token = _token;
+    if (token != null && cid != null) {
+      _loadOptions();
+    }
+  }
+
+  PreferredSizeWidget _hallazgosAppBar() {
+    final canPop = Navigator.of(context).canPop();
+    return AppBar(
+      title: const Text('Hallazgos'),
+      automaticallyImplyLeading: canPop,
+      actions: [
+        if (!canPop)
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
+            onPressed: _logoutToLogin,
+          ),
+      ],
+    );
   }
 
   Future<void> _pickDate() async {
@@ -262,14 +315,15 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
   @override
   Widget build(BuildContext context) {
     if (_loadingCompanies) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: _hallazgosAppBar(),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_companies.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Hallazgos')),
+        appBar: _hallazgosAppBar(),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -284,9 +338,7 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hallazgos'),
-      ),
+      appBar: _hallazgosAppBar(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
