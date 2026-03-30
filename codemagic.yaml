@@ -49,6 +49,7 @@ workflows:
         script: |
           set -e
           flutter pub get
+          dart run flutter_launcher_icons
           (cd ios && pod install)
 
       - name: Code signing
