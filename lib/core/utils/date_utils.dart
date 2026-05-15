@@ -14,4 +14,15 @@ class DateUtilsApp {
 
     return '$day/$month/$year $hour:$minute';
   }
+
+  /// Fecha y hora local para saludo en inicio (día/mes/año hora:min).
+  static String formatNowLocal() {
+    final date = DateTime.now();
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year $hour:$minute';
+  }
 }

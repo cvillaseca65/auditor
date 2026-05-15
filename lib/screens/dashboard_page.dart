@@ -1,17 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+
 import '../config.dart';
-import 'login_page.dart';
+import '../core/widgets/sim_branded_app_bar.dart';
+import '../services/session_service.dart';
 import 'lines_page.dart';
+import '../util/session_nav.dart';
 
 enum ViewLevel { companies, audits, plans }
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key, this.showMenuBack = false});
 
-  /// Si es true (viene del menú post-login), en el nivel compañías muestra volver al menú.
   final bool showMenuBack;
 
   @override
@@ -31,11 +32,26 @@ class _DashboardPageState extends State<DashboardPage> {
 
   bool isLoading = true;
   String error = '';
+  bool _sessionCompanyApplied = false;
 
   @override
   void initState() {
     super.initState();
-    fetchData();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final companyId = await SessionService.getCompanyId();
+    final companyName = await SessionService.getCompanyName();
+    if (companyId != null) {
+      selectedCompany = {
+        'id': companyId,
+        'name': companyName ?? 'Organización',
+      };
+      currentLevel = ViewLevel.audits;
+      _sessionCompanyApplied = true;
+    }
+    await fetchData();
   }
 
   static int _compareMapsByName(Map<String, dynamic> a, Map<String, dynamic> b) {
@@ -59,10 +75,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  Future<String?> _token() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
+  Future<String?> _token() => SessionService.getToken();
 
   Future<void> fetchData() async {
     setState(() {
@@ -136,20 +149,48 @@ class _DashboardPageState extends State<DashboardPage> {
         error = 'Error ${response.statusCode}';
       }
     } catch (e) {
-      error = 'Error fetching data: $e';
+      error = 'Error al cargar: $e';
     }
 
-    setState(() => isLoading = false);
+    if (mounted) setState(() => isLoading = false);
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
-    );
+    await navigateToLogin(context);
+  }
+
+  void _onBack() {
+    if (currentLevel == ViewLevel.plans) {
+      setState(() => currentLevel = ViewLevel.audits);
+      fetchData();
+      return;
+    }
+    if (currentLevel == ViewLevel.audits) {
+      if (_sessionCompanyApplied || widget.showMenuBack) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() => currentLevel = ViewLevel.companies);
+        fetchData();
+      }
+      return;
+    }
+    if (widget.showMenuBack) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  String _appBarTitle() {
+    switch (currentLevel) {
+      case ViewLevel.companies:
+        return 'Auditorías';
+      case ViewLevel.audits:
+        return 'Auditorías en curso';
+      case ViewLevel.plans:
+        return selectedAudit?['title']?.toString() ??
+            selectedAudit?['name']?.toString() ??
+            'Planes';
+    }
   }
 
   Widget buildList() {
@@ -159,15 +200,15 @@ class _DashboardPageState extends State<DashboardPage> {
     switch (currentLevel) {
       case ViewLevel.companies:
         data = companies;
-        emptyMessage = 'No companies';
+        emptyMessage = 'No hay auditorías asignadas';
         break;
       case ViewLevel.audits:
         data = audits;
-        emptyMessage = 'No audits';
+        emptyMessage = 'No hay auditorías en curso';
         break;
       case ViewLevel.plans:
         data = plans;
-        emptyMessage = 'No plans';
+        emptyMessage = 'No hay planes en esta auditoría';
         break;
     }
 
@@ -186,20 +227,15 @@ class _DashboardPageState extends State<DashboardPage> {
             title: Text(
               currentLevel == ViewLevel.companies
                   ? item['name'] ?? 'Company ${item['id']}'
-                  : item['name'] ?? '',
+                  : item['name'] ?? item['title'] ?? '',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            subtitle: currentLevel == ViewLevel.audits &&
-                    item['start'] != null
+            subtitle: currentLevel == ViewLevel.audits && item['start'] != null
                 ? Text(
                     formatDate(item['start']),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   )
-                : currentLevel == ViewLevel.plans &&
-                        item['moment'] != null
+                : currentLevel == ViewLevel.plans && item['moment'] != null
                     ? Text(
                         formatDate(item['moment']),
                         style: const TextStyle(
@@ -230,7 +266,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                   );
-                  break;
+                  return;
               }
               fetchData();
             },
@@ -240,50 +276,60 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _auditBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _appBarTitle(),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: fetchData,
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: buildList()),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!widget.showMenuBack) {
+      return _auditBody();
+    }
+
+    final showBack = currentLevel != ViewLevel.companies ||
+        widget.showMenuBack ||
+        _sessionCompanyApplied;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          currentLevel == ViewLevel.companies
-              ? 'Compañías'
-              : currentLevel == ViewLevel.audits
-                  ? 'Auditorías - ${selectedCompany?['name'] ?? ''}'
-                  : 'Planes - ${selectedAudit?['title'] ?? ''}',
-        ),
-        leading: currentLevel != ViewLevel.companies
+      appBar: SimBrandedAppBar(
+        leading: showBack
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  setState(() {
-                    switch (currentLevel) {
-                      case ViewLevel.audits:
-                        currentLevel = ViewLevel.companies;
-                        break;
-                      case ViewLevel.plans:
-                        currentLevel = ViewLevel.audits;
-                        break;
-                      default:
-                        break;
-                    }
-                    fetchData();
-                  });
-                },
+                onPressed: _onBack,
               )
-            : widget.showMenuBack
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.of(context).pop(),
-                  )
-                : null,
+            : null,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-          )
+            icon: const Icon(Icons.refresh),
+            onPressed: fetchData,
+          ),
         ],
       ),
-      body: buildList(),
+      body: _auditBody(),
     );
   }
 }

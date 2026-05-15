@@ -5,7 +5,7 @@ import '../core/theme/sim_theme.dart';
 import '../services/pending_audit_plans_service.dart';
 import 'dashboard_page.dart';
 import 'hallazgos_create_page.dart';
-import 'login_page.dart';
+import '../util/session_nav.dart';
 
 /// Tras el login: botones Hallazgos y, si aplica, Auditoría.
 class PostLoginMenuPage extends StatefulWidget {
@@ -29,9 +29,7 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
     final token = prefs.getString('jwt_token');
     if (token == null || token.isEmpty) {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+      await navigateToLogin(context);
       return;
     }
 
@@ -55,13 +53,8 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
-    );
+    await navigateToLogin(context);
   }
 
   @override

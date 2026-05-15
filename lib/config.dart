@@ -33,6 +33,34 @@ class ApiConfig {
   static String ncAttachmentPath(int ncId) =>
       '/api/v1/nc/$ncId/attachments/';
 
+  /// Consulta móvil (home, hallazgos, documentos, norma).
+  static const String mobileHomePendingPath = '/api/v1/mobile/home/pending/';
+  /// Usuario autenticado (mismo que web API).
+  static const String currentUserPath = '/api/v1/me/';
+  static String mobilePendingActionPath(String actionType, int id) =>
+      '/api/v1/mobile/pending/$actionType/$id/';
+  static const String mobileNcListPath = '/api/v1/mobile/nc/';
+  static String mobileNcDetailPath(int id) => '/api/v1/mobile/nc/$id/';
+  static String mobileNcWorkflowPath(int id) =>
+      '/api/v1/mobile/nc/$id/workflow/';
+  static const String mobileDocumentsPath = '/api/v1/mobile/documents/';
+  static String mobileDocumentDetailPath(int id) =>
+      '/api/v1/mobile/documents/$id/';
+  static const String mobileNormativePath = '/api/v1/mobile/normative/';
+  static String mobileNormativeDetailPath(String slug) =>
+      '/api/v1/mobile/normative/$slug/';
+  static String mobileComplyDetailPath(int id) =>
+      '/api/v1/mobile/normative/comply/$id/';
+
+  static const String mobileUsersPath = '/api/v1/mobile/users/';
+  static String mobileUserDetailPath(int id) => '/api/v1/mobile/users/$id/';
+  static String mobileUserSkillsPath(int id) =>
+      '/api/v1/mobile/users/$id/skills/';
+  static String mobileUserPerformancePath(int id) =>
+      '/api/v1/mobile/users/$id/performance/';
+  static String mobileUserTasksPath(int id) =>
+      '/api/v1/mobile/users/$id/tasks/';
+
   /// Headers por defecto para requests JSON
   static Map<String, String> defaultHeaders({String? token}) {
     final headers = <String, String>{};

@@ -12,7 +12,8 @@ class SimAppBar extends StatelessWidget implements PreferredSizeWidget {
         children: [
           Image.asset(
             'assets/images/logo.png',
-            height: 40,
+            height: 56,
+            fit: BoxFit.contain,
           ),
           const SizedBox(width: 12),
           Text(title),

@@ -5,6 +5,15 @@ allprojects {
     }
 }
 
+// Desactiva tareas lintVital (bloqueos de archivo en Windows/OneDrive).
+subprojects {
+    afterEvaluate {
+        tasks.matching { it.name.startsWith("lintVital") }.configureEach {
+            enabled = false
+        }
+    }
+}
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")

@@ -142,24 +142,19 @@ class _LinesPageState extends State<LinesPage> {
       return Scaffold(body: Center(child: Text(error)));
     }
 
+    final auditedName = planFull?['audited']?['name']?.toString() ?? '';
+    final positionName = planFull?['position']?['name']?.toString() ?? '';
+    final locationName = planFull?['location']?['name']?.toString() ?? '';
+    final titleParts = [auditedName, positionName, locationName]
+        .where((s) => s.isNotEmpty)
+        .join(' · ');
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/logo.png',
-              height: 30,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '${planFull?['audited']?['name'] ?? ''} - '
-                '${planFull?['position']?['name'] ?? ''} - '
-                '${planFull?['location']?['name'] ?? ''}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        title: Text(
+          titleParts.isNotEmpty ? titleParts : 'Líneas de auditoría',
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
         ),
       ),
       floatingActionButton: FloatingActionButton(

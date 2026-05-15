@@ -2,11 +2,10 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../services/nc_hallazgos_service.dart';
+import '../services/session_service.dart';
 import '../util/file_bytes.dart';
-import 'login_page.dart';
+import '../util/session_nav.dart';
 
 class _PendingAttachment {
   _PendingAttachment({
@@ -43,6 +42,8 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
   bool _loadingOptions = false;
   bool _submitting = false;
   String? _pageError;
+  bool _companyLocked = false;
+  String _companyDisplayName = '';
 
   DateTime _date = DateTime.now();
   int? _originId;
@@ -59,22 +60,38 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
   }
 
   Future<void> _bootstrap() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
+    final token = await SessionService.getToken();
     if (token == null || token.isEmpty) {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+      await navigateToLogin(context);
       return;
     }
     _token = token;
     try {
       final companies = await NcHallazgosService.fetchNcCompanies(token);
       if (!mounted) return;
+      final sessionCompanyId = await SessionService.getCompanyId();
+      final sessionCompanyName = await SessionService.getCompanyName();
+      int? defaultId;
+      var locked = false;
+      if (sessionCompanyId != null &&
+          companies.any((c) => c.id == sessionCompanyId)) {
+        defaultId = sessionCompanyId;
+        locked = true;
+      } else if (companies.isNotEmpty) {
+        defaultId = companies.first.id;
+      }
+      final displayName = locked
+          ? (sessionCompanyName ??
+              companies
+                  .firstWhere((c) => c.id == defaultId)
+                  .title)
+          : '';
       setState(() {
         _companies = companies;
-        _companyId = companies.isEmpty ? null : companies.first.id;
+        _companyId = defaultId;
+        _companyLocked = locked;
+        _companyDisplayName = displayName;
         _loadingCompanies = false;
       });
       if (_companyId != null) {
@@ -253,13 +270,8 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
   }
 
   Future<void> _logoutToLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
-    );
+    await navigateToLogin(context);
   }
 
   void _resetAfterSuccessfulCreate() {
@@ -352,22 +364,43 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
-            DropdownButtonFormField<int>(
-              decoration: const InputDecoration(
-                labelText: 'Compañía',
-                border: OutlineInputBorder(),
+            if (_companyLocked)
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Empresa',
+                  border: OutlineInputBorder(),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.business, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _companyDisplayName,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              DropdownButtonFormField<int>(
+                decoration: const InputDecoration(
+                  labelText: 'Empresa',
+                  border: OutlineInputBorder(),
+                ),
+                value: _companyId,
+                items: _companies
+                    .map(
+                      (c) =>
+                          DropdownMenuItem(value: c.id, child: Text(c.title)),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  setState(() => _companyId = v);
+                  _loadOptions();
+                },
               ),
-              value: _companyId,
-              items: _companies
-                  .map(
-                    (c) => DropdownMenuItem(value: c.id, child: Text(c.title)),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                setState(() => _companyId = v);
-                _loadOptions();
-              },
-            ),
             const SizedBox(height: 16),
             if (_loadingOptions)
               const Center(child: Padding(
