@@ -167,8 +167,8 @@ class SimTheme {
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final base = textTheme.labelMedium?.copyWith(
             fontSize: AppTypography.navBarLabel,
-            height: 1.2,
-            fontWeight: FontWeight.w600,
+            height: 1.15,
+            fontWeight: FontWeight.w400,
             letterSpacing: 0,
           );
           if (states.contains(WidgetState.selected)) {

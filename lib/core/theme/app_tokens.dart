@@ -6,7 +6,7 @@ abstract final class AppTypography {
   static const double minCaption = 13;
   static const double minLabel = 14;
   static const double minBodySecondary = 14;
-  static const double navBarLabel = 13;
+  static const double navBarLabel = 11;
 }
 
 abstract final class AppSpacing {

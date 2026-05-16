@@ -90,58 +90,20 @@ class _HomeShellState extends State<HomeShell> {
                     ],
                   ),
                 ),
-                child: NavigationBarTheme(
-                data: NavigationBarTheme.of(context).copyWith(
-                  backgroundColor: Colors.transparent,
-                ),
-                child: NavigationBar(
-                  height: 64,
-                  elevation: 0,
-                  backgroundColor: Colors.transparent,
-                  selectedIndex: _index,
-                  onDestinationSelected: (i) {
+                child: _ShellBottomNav(
+                  index: _index,
+                  onSelected: (i) {
                     if (i == _index) {
-                      _tabNavigatorKeys[i].currentState?.popUntil((r) => r.isFirst);
+                      _tabNavigatorKeys[i]
+                          .currentState
+                          ?.popUntil((r) => r.isFirst);
                     }
                     setState(() => _index = i);
                     if (i == 0) {
                       _homeKey.currentState?.showKpiDashboardOnly();
                     }
                   },
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home_rounded),
-                      label: 'Inicio',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.report_outlined),
-                      selectedIcon: Icon(Icons.report_rounded),
-                      label: 'Hallazgos',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.description_outlined),
-                      selectedIcon: Icon(Icons.description_rounded),
-                      label: 'Documentos',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.menu_book_outlined),
-                      selectedIcon: Icon(Icons.menu_book_rounded),
-                      label: 'Norma',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.people_outline),
-                      selectedIcon: Icon(Icons.people_rounded),
-                      label: 'Usuarios',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.fact_check_outlined),
-                      selectedIcon: Icon(Icons.fact_check_rounded),
-                      label: 'Auditoría',
-                    ),
-                  ],
                 ),
-              ),
             ),
               ),
             ),
@@ -215,6 +177,115 @@ class _HomeShellState extends State<HomeShell> {
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         bottomNavigationBar: _floatingNavBar(),
+      ),
+    );
+  }
+}
+
+class _ShellNavItem {
+  const _ShellNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+}
+
+/// Barra inferior compacta: 6 pestañas sin solapar etiquetas.
+class _ShellBottomNav extends StatelessWidget {
+  const _ShellBottomNav({
+    required this.index,
+    required this.onSelected,
+  });
+
+  final int index;
+  final ValueChanged<int> onSelected;
+
+  static const _items = [
+    _ShellNavItem(
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home_rounded,
+      label: 'Home',
+    ),
+    _ShellNavItem(
+      icon: Icons.report_outlined,
+      selectedIcon: Icons.report_rounded,
+      label: 'Hallazgo',
+    ),
+    _ShellNavItem(
+      icon: Icons.description_outlined,
+      selectedIcon: Icons.description_rounded,
+      label: 'Documento',
+    ),
+    _ShellNavItem(
+      icon: Icons.menu_book_outlined,
+      selectedIcon: Icons.menu_book_rounded,
+      label: 'Norma',
+    ),
+    _ShellNavItem(
+      icon: Icons.people_outline,
+      selectedIcon: Icons.people_rounded,
+      label: 'Usuario',
+    ),
+    _ShellNavItem(
+      icon: Icons.fact_check_outlined,
+      selectedIcon: Icons.fact_check_rounded,
+      label: 'Auditar',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 72,
+      child: Row(
+        children: List.generate(_items.length, (i) {
+          final item = _items[i];
+          final selected = index == i;
+          final color =
+              selected ? scheme.primary : scheme.onSurfaceVariant;
+
+          return Expanded(
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => onSelected(i),
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        selected ? item.selectedIcon : item.icon,
+                        size: 24,
+                        color: color,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: AppTypography.navBarLabel,
+                          fontWeight: FontWeight.w400,
+                          height: 1.1,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
