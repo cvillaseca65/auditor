@@ -55,15 +55,42 @@ class _HomeShellState extends State<HomeShell> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadii.xl),
             boxShadow: AppShadows.navFloat(context),
+            border: Border.all(
+              color: Theme.of(context)
+                  .colorScheme
+                  .outlineVariant
+                  .withValues(alpha: 0.55),
+            ),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(AppRadii.xl),
             child: Material(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surface
-                  .withValues(alpha: 0.94),
-              child: NavigationBarTheme(
+              color: Colors.transparent,
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey<int>(_index),
+                tween: Tween(begin: 0.96, end: 1),
+                duration: AppMotion.medium,
+                curve: AppMotion.curve,
+                builder: (context, scale, child) => Transform.scale(
+                  scale: scale,
+                  alignment: Alignment.bottomCenter,
+                  child: child,
+                ),
+                child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Theme.of(context).colorScheme.surface.withValues(alpha: 0.97),
+                      Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerLow
+                          .withValues(alpha: 0.98),
+                    ],
+                  ),
+                ),
+                child: NavigationBarTheme(
                 data: NavigationBarTheme.of(context).copyWith(
                   backgroundColor: Colors.transparent,
                 ),
@@ -116,6 +143,8 @@ class _HomeShellState extends State<HomeShell> {
                 ),
               ),
             ),
+              ),
+            ),
           ),
         ),
       ),
@@ -144,33 +173,33 @@ class _HomeShellState extends State<HomeShell> {
           child: IndexedStack(
             index: _index,
             children: [
-              TabRootNavigator(
-                navigatorKey: _tabNavigatorKeys[0],
-                child: HomePendingPage(
-                  key: _homeKey,
-                  onOpenHallazgos: _goHallazgosTab,
+                TabRootNavigator(
+                  navigatorKey: _tabNavigatorKeys[0],
+                  child: HomePendingPage(
+                    key: _homeKey,
+                    onOpenHallazgos: _goHallazgosTab,
+                  ),
                 ),
-              ),
-              TabRootNavigator(
-                navigatorKey: _tabNavigatorKeys[1],
-                child: HallazgosListPage(key: _hallazgosKey),
-              ),
-              TabRootNavigator(
-                navigatorKey: _tabNavigatorKeys[2],
-                child: const DocumentosPage(),
-              ),
-              TabRootNavigator(
-                navigatorKey: _tabNavigatorKeys[3],
-                child: const NormaPage(),
-              ),
-              TabRootNavigator(
-                navigatorKey: _tabNavigatorKeys[4],
-                child: const UsuariosListPage(),
-              ),
-              TabRootNavigator(
-                navigatorKey: _tabNavigatorKeys[5],
-                child: const DashboardPage(showMenuBack: false),
-              ),
+                TabRootNavigator(
+                  navigatorKey: _tabNavigatorKeys[1],
+                  child: HallazgosListPage(key: _hallazgosKey),
+                ),
+                TabRootNavigator(
+                  navigatorKey: _tabNavigatorKeys[2],
+                  child: const DocumentosPage(),
+                ),
+                TabRootNavigator(
+                  navigatorKey: _tabNavigatorKeys[3],
+                  child: const NormaPage(),
+                ),
+                TabRootNavigator(
+                  navigatorKey: _tabNavigatorKeys[4],
+                  child: const UsuariosListPage(),
+                ),
+                TabRootNavigator(
+                  navigatorKey: _tabNavigatorKeys[5],
+                  child: const DashboardPage(showMenuBack: false),
+                ),
             ],
           ),
         ),

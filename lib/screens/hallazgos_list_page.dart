@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/motion/app_page_transitions.dart';
+import '../core/widgets/sim_loading_indicator.dart';
+import '../core/widgets/ui/app_visual_kit.dart';
+
 import '../models/mobile_models.dart';
 import '../services/mobile_api_service.dart';
 import 'hallazgos_create_page.dart';
@@ -81,9 +85,7 @@ class HallazgosListPageState extends State<HallazgosListPage>
   void _onItemTap(NcListItem item) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => HallazgosDetailPage(ncId: item.id),
-      ),
+      AppPageTransitions.elegant(HallazgosDetailPage(ncId: item.id)),
     );
   }
 
@@ -136,7 +138,7 @@ class HallazgosListPageState extends State<HallazgosListPage>
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SimLoadingIndicator())
               : _error != null
                   ? Center(
                       child: Padding(
@@ -158,40 +160,22 @@ class HallazgosListPageState extends State<HallazgosListPage>
                       ? const Center(child: Text('Sin hallazgos'))
                       : RefreshIndicator(
                           onRefresh: _load,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.all(8),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(4, 8, 4, 88),
                             itemCount: _items.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final item = _items[index];
-                              return ListTile(
-                                title: Text(
-                                  '#${item.id} · ${item.finding}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  '${item.statusLabel} · ${item.area}\n'
-                                  '${item.responsible}',
-                                ),
-                                isThreeLine: true,
-                                leading: item.isDelayed
-                                    ? const Icon(
-                                        Icons.warning_amber,
-                                        color: Colors.red,
-                                      )
-                                    : Icon(
-                                        item.isClosed
-                                            ? Icons.check_circle_outline
-                                            : Icons.pending_actions,
-                                      ),
-                                trailing: Icon(
-                                  item.isClosed
-                                      ? Icons.chevron_right
-                                      : Icons.open_in_new,
-                                  size: 20,
-                                ),
+                              return AppEntityListTile(
+                                title: '#${item.id} · ${item.finding}',
+                                subtitle:
+                                    '${item.statusLabel} · ${item.area}\n${item.responsible}',
+                                isDelayed: item.isDelayed,
+                                leadingIcon: item.isClosed
+                                    ? Icons.check_circle_outline
+                                    : Icons.report_problem_outlined,
+                                accentColor: item.isDelayed
+                                    ? Theme.of(context).colorScheme.error
+                                    : const Color(0xFF16A34A),
                                 onTap: () => _onItemTap(item),
                               );
                             },

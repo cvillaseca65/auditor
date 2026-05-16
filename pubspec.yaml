@@ -40,6 +40,8 @@ dependencies:
   url_launcher: ^6.2.5
   file_picker: ^10.3.10
   dropdown_search: ^6.0.2
+  flutter_animate: ^4.5.2
+  webview_flutter: ^4.13.0
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +73,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/logo.png
+    - assets/images/logo_hero.png
     - assets/branding/app_icon.png
   # To add assets to your application, add an assets section, like this:
   # assets:

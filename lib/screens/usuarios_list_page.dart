@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/sim_loading_indicator.dart';
+
 import '../core/theme/sim_theme.dart';
 import '../models/mobile_models.dart';
 import '../services/mobile_api_service.dart';
@@ -95,7 +97,7 @@ class _UsuariosListPageState extends State<UsuariosListPage> {
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SimLoadingIndicator())
               : _error != null
                   ? Center(child: Text(_error!))
                   : _items.isEmpty

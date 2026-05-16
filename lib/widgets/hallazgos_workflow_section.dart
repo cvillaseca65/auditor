@@ -1,5 +1,7 @@
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
+
+import '../core/widgets/sim_loading_indicator.dart';
 import 'package:flutter/services.dart';
 
 import '../services/mobile_api_service.dart';
@@ -257,7 +259,7 @@ class _HallazgosWorkflowSectionState extends State<HallazgosWorkflowSection> {
                 ? const SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: const SimLoadingIndicator.compact(),
                   )
                 : const Text('Autorizar'),
           ),

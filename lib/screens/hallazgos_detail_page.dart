@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/mobile_detail/nc_detail_body.dart';
+import '../core/widgets/sim_loading_indicator.dart';
 import '../services/mobile_api_service.dart';
-import '../util/plain_text.dart';
-import '../util/open_sim_url.dart';
 import '../util/session_nav.dart';
 import '../widgets/hallazgos_workflow_section.dart';
-import '../widgets/relations_section.dart';
 
 class HallazgosDetailPage extends StatefulWidget {
   final int ncId;
@@ -72,7 +71,7 @@ class _HallazgosDetailPageState extends State<HallazgosDetailPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SimLoadingIndicator())
           : _error != null
               ? Center(
                   child: Padding(
@@ -100,89 +99,25 @@ class _HallazgosDetailPageState extends State<HallazgosDetailPage> {
     final canAct = workflow['can_act'] as bool? ?? false;
     final isClosed = d['is_closed'] as bool? ?? false;
 
-    // Contexto del hallazgo primero (como nc_close_form.html): siempre visible
-    // antes de las acciones de workflow, en cualquier etapa.
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        ..._buildReadOnlyContent(d, isClosed),
-        if (canAct && !isClosed) ...[
-          const SizedBox(height: 8),
-          HallazgosWorkflowSection(
-            key: ValueKey(
-              '${workflow['stage']}-${workflow['status']}-${d['id']}',
+    return NcDetailBody(
+      ncId: widget.ncId,
+      data: d,
+      simOpenUrl: d['open_url']?.toString(),
+      openSimLabel: isClosed ? 'Ver en SIM (web)' : 'Abrir en SIM (web)',
+      extraSections: [
+        if (canAct && !isClosed)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: HallazgosWorkflowSection(
+              key: ValueKey(
+                '${workflow['stage']}-${workflow['status']}-${d['id']}',
+              ),
+              ncId: widget.ncId,
+              workflow: workflow,
+              onUpdated: _load,
             ),
-            ncId: widget.ncId,
-            workflow: workflow,
-            onUpdated: _load,
           ),
-        ],
       ],
-    );
-  }
-
-  List<Widget> _buildReadOnlyContent(Map<String, dynamic> d, bool isClosed) {
-    final attachments = d['attachments'] as List<dynamic>? ?? [];
-    final openUrl = d['open_url']?.toString() ?? '';
-
-    return [
-      Text(
-        plainText(d['status_label']?.toString()),
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-      const SizedBox(height: 8),
-      _row('Fecha', d['date']?.toString() ?? '-'),
-      _row('Cierre', d['close']?.toString() ?? '-'),
-      _row('Origen', d['origin']?.toString() ?? '-'),
-      _row('Área', d['area']?.toString() ?? '-'),
-      const SizedBox(height: 12),
-      Text(
-        'Hallazgo',
-        style: Theme.of(context).textTheme.labelLarge,
-      ),
-      const SizedBox(height: 4),
-      Text(plainText(d['finding']?.toString())),
-      if (attachments.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        Text('Adjuntos', style: Theme.of(context).textTheme.labelLarge),
-        ...attachments.map((a) {
-          final map = a as Map<String, dynamic>;
-          final url = map['url']?.toString() ?? '';
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(map['description']?.toString() ?? 'Adjunto'),
-            trailing: const Icon(Icons.open_in_new),
-            onTap: url.isNotEmpty ? () => openSimUrl(url) : null,
-          );
-        }),
-      ],
-      RelationsSection(relations: d['relations'] as List<dynamic>? ?? []),
-      if (openUrl.isNotEmpty) ...[
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: () => openSimUrl(openUrl),
-          icon: const Icon(Icons.open_in_browser),
-          label: Text(isClosed ? 'Ver en SIM (web)' : 'Abrir en SIM (web)'),
-        ),
-      ],
-    ];
-  }
-
-  Widget _row(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: RichText(
-        text: TextSpan(
-          style: DefaultTextStyle.of(context).style,
-          children: [
-            TextSpan(
-              text: '$label: ',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            TextSpan(text: value),
-          ],
-        ),
-      ),
     );
   }
 }

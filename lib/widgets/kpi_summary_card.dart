@@ -1,22 +1,10 @@
 import 'package:flutter/material.dart';
-
+import '../core/motion/app_motion_kit.dart';
 import '../core/theme/app_tokens.dart';
 import '../core/theme/sim_theme.dart';
 
-/// Tarjeta KPI: acento lateral, métricas y pie contextual (tema claro/oscuro).
+/// Tarjeta KPI estilo dashboard (cabecera en degradado + métricas grandes).
 class KpiSummaryCard extends StatelessWidget {
-  final String title;
-  final String labelLeft;
-  final int countLeft;
-  final int delayedLeft;
-  final String? labelRight;
-  final int? countRight;
-  final int? delayedRight;
-  final String footer;
-  final IconData icon;
-  final Color accentColor;
-  final VoidCallback? onTap;
-
   const KpiSummaryCard({
     super.key,
     required this.title,
@@ -32,11 +20,29 @@ class KpiSummaryCard extends StatelessWidget {
     this.onTap,
   });
 
-  Widget _metricBlock(
+  final String title;
+  final String labelLeft;
+  final int countLeft;
+  final int delayedLeft;
+  final String? labelRight;
+  final int? countRight;
+  final int? delayedRight;
+  final String footer;
+  final IconData icon;
+  final Color accentColor;
+  final VoidCallback? onTap;
+  List<Color> get _headerGradient => [
+        accentColor,
+        Color.lerp(accentColor, SimTheme.primaryColor, 0.45)!,
+        Color.lerp(accentColor, const Color(0xFF1E1B4B), 0.3)!,
+      ];
+
+  Widget _metric(
     BuildContext context, {
     required String label,
     required int count,
     required int delayed,
+    required bool onDark,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Column(
@@ -44,45 +50,57 @@ class KpiSummaryCard extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                letterSpacing: 0.45,
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontSize: AppTypography.minCaption,
+                letterSpacing: 0.35,
+                fontWeight: FontWeight.w700,
+                color: onDark
+                    ? Colors.white.withValues(alpha: 0.75)
+                    : scheme.onSurfaceVariant,
               ),
         ),
-        const SizedBox(height: 6),
-        RichText(
-          text: TextSpan(
-            style: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              height: 1.05,
-              letterSpacing: -0.8,
-              color: scheme.onSurface,
-              fontFeatures: const [FontFeature.tabularFigures()],
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.w900,
+                height: 1,
+                letterSpacing: -1.2,
+                color: onDark ? Colors.white : scheme.onSurface,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
-            children: [
-              TextSpan(text: '$count'),
-              if (delayed > 0)
-                TextSpan(
-                  text: '  / ',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurfaceVariant,
+            if (delayed > 0) ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 8, bottom: 4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: scheme.error.withValues(alpha: onDark ? 0.9 : 0.12),
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                    border: Border.all(
+                      color: scheme.error.withValues(alpha: onDark ? 0.5 : 0.35),
+                    ),
+                  ),
+                  child: Text(
+                    '$delayed',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: onDark ? Colors.white : scheme.error,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
-              if (delayed > 0)
-                TextSpan(
-                  text: '$delayed',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.error,
-                  ),
-                ),
+              ),
             ],
-          ),
+          ],
         ),
       ],
     );
@@ -93,203 +111,203 @@ class KpiSummaryCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final hasPending = countLeft > 0 || (countRight ?? 0) > 0;
     final hasDelayed = delayedLeft > 0 || (delayedRight ?? 0) > 0;
-    final borderTint = accentColor.withValues(alpha: hasPending ? 0.35 : 0.12);
+    final dual = labelRight != null;
 
-    final body = Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 16, 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 5,
-            margin: const EdgeInsets.only(top: 6, bottom: 6, left: 0),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  accentColor,
-                  Color.lerp(accentColor, scheme.primary, 0.35)!,
-                ],
+    final card = AppScalePressable(
+      onTap: onTap,
+      enabled: onTap != null,
+      child: Material(
+      color: Colors.transparent,
+      elevation: 0,
+      shadowColor: accentColor.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(AppRadii.xl + 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadii.xl + 4),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadii.xl + 4),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: hasPending ? 0.28 : 0.1),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
+                spreadRadius: -4,
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadii.xl + 4),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: accentColor.withValues(alpha: 0.28),
-                            blurRadius: 16,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: accentColor.withValues(alpha: 0.15),
-                        child: Icon(icon, color: accentColor, size: 26),
-                      ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 14, 20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: _headerGradient,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: -20,
+                        top: -24,
+                        child: Icon(
+                          icon,
+                          size: 88,
+                          color: Colors.white.withValues(alpha: 0.12),
+                        ),
+                      ),
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            title,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.2,
-                                  color: scheme.onSurface,
-                                  height: 1.25,
-                                ),
-                          ),
-                          if (onTap != null)
-                            Text(
-                              'Toca para abrir',
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: scheme.primary.withValues(alpha: 0.95),
-                                    fontWeight: FontWeight.w600,
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(11),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.35),
                                   ),
+                                ),
+                                child: Icon(icon, color: Colors.white, size: 26),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.25,
+                                            height: 1.15,
+                                          ),
+                                    ),
+                                    if (onTap != null)
+                                      Text(
+                                        'Ver detalle →',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
+                                              fontSize: AppTypography.minCaption,
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.85),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (onTap != null)
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  size: 22,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          if (dual)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: _metric(
+                                    context,
+                                    label: labelLeft,
+                                    count: countLeft,
+                                    delayed: delayedLeft,
+                                    onDark: true,
+                                  ),
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 52,
+                                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                ),
+                                Expanded(
+                                  child: _metric(
+                                    context,
+                                    label: labelRight!,
+                                    count: countRight ?? 0,
+                                    delayed: delayedRight ?? 0,
+                                    onDark: true,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            _metric(
+                              context,
+                              label: labelLeft,
+                              count: countLeft,
+                              delayed: delayedLeft,
+                              onDark: true,
                             ),
                         ],
                       ),
-                    ),
-                    Icon(
-                      onTap != null
-                          ? Icons.keyboard_arrow_right_rounded
-                          : Icons.analytics_rounded,
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
-                      size: 26,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _metricBlock(
-                        context,
-                        label: labelLeft,
-                        count: countLeft,
-                        delayed: delayedLeft,
+                Container(
+                  color: scheme.surface,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                  child: Row(
+                    children: [
+                      Icon(
+                        hasDelayed
+                            ? Icons.warning_amber_rounded
+                            : Icons.insights_rounded,
+                        size: 20,
+                        color: hasDelayed ? scheme.error : accentColor,
                       ),
-                    ),
-                    if (labelRight != null) ...[
-                      Container(
-                        width: 1,
-                        height: 56,
-                        margin: const EdgeInsets.symmetric(horizontal: 14),
-                        color: scheme.outlineVariant.withValues(alpha: 0.7),
-                      ),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: _metricBlock(
-                          context,
-                          label: labelRight!,
-                          count: countRight ?? 0,
-                          delayed: delayedRight ?? 0,
+                        child: Text(
+                          footer,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontSize: AppTypography.minBodySecondary,
+                                fontWeight:
+                                    hasDelayed ? FontWeight.w700 : FontWeight.w500,
+                                color: hasDelayed
+                                    ? scheme.error
+                                    : scheme.onSurfaceVariant,
+                                height: 1.35,
+                              ),
                         ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 12),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: hasDelayed
-                        ? scheme.errorContainer.withValues(alpha: 0.55)
-                        : scheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(AppRadii.md),
-                    border: Border.all(
-                      color: hasDelayed
-                          ? scheme.error.withValues(alpha: 0.35)
-                          : scheme.outlineVariant.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      children: [
-                        Icon(
-                          hasDelayed
-                              ? Icons.error_outline_rounded
-                              : Icons.lightbulb_outline_rounded,
-                          size: 18,
-                          color: hasDelayed ? scheme.error : scheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            footer,
-                            style: TextStyle(
-                              fontSize: 13,
-                              height: 1.3,
-                              fontWeight:
-                                  hasDelayed ? FontWeight.w700 : FontWeight.w500,
-                          color: hasDelayed ? scheme.error : scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
+      ),
       ),
     );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: AppMotion.medium,
-        curve: AppMotion.curve,
-        builder: (context, t, child) {
-          return Transform.translate(
-            offset: Offset(0, 8 * (1 - t)),
-            child: Opacity(opacity: t, child: child),
-          );
-        },
-        child: Material(
-          color: scheme.surface,
-          elevation: hasPending ? 2 : 0,
-          shadowColor: accentColor.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(AppRadii.xl + 2),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppRadii.xl + 2),
-            onTap: onTap,
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadii.xl + 2),
-                border: Border.all(color: borderTint, width: 1),
-                gradient: LinearGradient(
-                  colors: [
-                    scheme.surface,
-                    accentColor.withValues(alpha: 0.045),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: body,
-            ),
-          ),
-        ),
-      ),
+      child: card,
     );
   }
 }

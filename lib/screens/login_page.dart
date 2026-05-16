@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import '../core/motion/app_motion_kit.dart';
 import '../core/theme/app_tokens.dart';
 import '../core/widgets/app_premium_card.dart';
 import '../core/widgets/login_hero_visuals.dart';
+import '../core/widgets/sim_loading_indicator.dart';
 import '../services/mobile_api_service.dart';
 import '../services/session_service.dart';
 import 'app_info_page.dart';
@@ -135,21 +137,27 @@ class _LoginPageState extends State<LoginPage> {
               );
             }
 
+            final heroHeight = (constraints.maxHeight * 0.32).clamp(220.0, 300.0);
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: LoginHeroBackdrop(
-                    compact: true,
-                    cornerRadius: AppRadii.xl + 4,
+                  child: SizedBox(
+                    height: heroHeight,
+                    width: double.infinity,
+                    child: LoginHeroBackdrop(
+                      compact: true,
+                      cornerRadius: AppRadii.xl + 4,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
                     child: Transform.translate(
-                      offset: const Offset(0, -26),
+                      offset: const Offset(0, -18),
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 440),
@@ -296,21 +304,14 @@ class _LoginPageState extends State<LoginPage> {
               child: FilledButton(
                 onPressed: _loading ? null : _login,
                 child: _loading
-                    ? SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: scheme.onPrimary,
-                        ),
-                      )
+                    ? const SimLoadingIndicator.compact()
                     : const Text('Entrar'),
               ),
             ),
           ],
         ),
       ),
-    );
+    ).appHeroIn(delay: const Duration(milliseconds: 220));
   }
 
   Widget _buildFeatureShowcase() {
@@ -365,7 +366,7 @@ class _LoginPageState extends State<LoginPage> {
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           color: scheme.onSurface,
                           fontWeight: FontWeight.w500,
-                          fontSize: 12,
+                          fontSize: 14,
                         ),
                   ),
                 ],

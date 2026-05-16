@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
 import '../core/utils/date_utils.dart';
+import '../core/widgets/app_premium_card.dart';
+import '../core/widgets/sim_loading_indicator.dart';
 import '../models/mobile_models.dart';
 import '../services/mobile_api_service.dart';
 import '../services/session_service.dart';
 import '../util/open_sim_url.dart';
 import '../util/plazo_sort.dart';
+import '../core/motion/app_page_transitions.dart';
+import '../core/widgets/ui/app_visual_kit.dart';
 import '../widgets/kpi_summary_card.dart';
 import '../util/session_nav.dart';
 import 'hallazgos_detail_page.dart';
@@ -21,18 +24,18 @@ Future<void> _openPendingItem(
   required String subtitle,
   required String editUrl,
   String? simViewUrl,
-  VoidCallback? onCompleted,
+  Future<void> Function()? onPendingRefresh,
 }) async {
   // Hallazgo (NC): workflow propio; no usar PendingActionView.
   if (mobileInApp &&
       mobileAction == 'nc' &&
       mobileObjectId != null) {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => HallazgosDetailPage(ncId: mobileObjectId),
+      AppPageTransitions.elegant(
+        HallazgosDetailPage(ncId: mobileObjectId),
       ),
     );
-    onCompleted?.call();
+    await onPendingRefresh?.call();
     return;
   }
 
@@ -40,24 +43,42 @@ Future<void> _openPendingItem(
       mobileAction != null &&
       mobileObjectId != null &&
       mobileAction.isNotEmpty) {
-    final done = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => PendingActionPage(
+    await Navigator.of(context).push<bool>(
+      AppPageTransitions.elegant(
+        PendingActionPage(
           actionType: mobileAction,
           objectId: mobileObjectId,
           subtitle: subtitle,
           fallbackUrl: editUrl,
           simViewUrl: simViewUrl,
-          onCompleted: onCompleted,
+          onPendingRefresh: onPendingRefresh,
         ),
       ),
     );
-    if (done == true && onCompleted != null) {
-      onCompleted();
+    return;
+  }
+
+  final url = (simViewUrl != null && simViewUrl.trim().isNotEmpty)
+      ? simViewUrl.trim()
+      : editUrl.trim();
+  if (url.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay enlace disponible para abrir este ítem.'),
+        ),
+      );
     }
     return;
   }
-  await openSimUrl(simViewUrl ?? editUrl);
+  final opened = await openSimUrl(url);
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No se pudo abrir el enlace. Compruebe la conexión.'),
+      ),
+    );
+  }
 }
 
 class HomePendingPage extends StatefulWidget {
@@ -69,6 +90,8 @@ class HomePendingPage extends StatefulWidget {
   HomePendingPageState createState() => HomePendingPageState();
 }
 
+enum _HomePendingListMode { dashboard, personal, organization }
+
 class HomePendingPageState extends State<HomePendingPage> {
   final _api = MobileApiService();
   bool _loading = true;
@@ -78,18 +101,31 @@ class HomePendingPageState extends State<HomePendingPage> {
   HallazgosSummary? _hallazgosSummary;
   List<PendingRow> _myItems = [];
   List<OwedRow> _owedItems = [];
-  bool _showDetail = false;
+  List<PendingRow> _orgItems = [];
+  _HomePendingListMode _listMode = _HomePendingListMode.dashboard;
   String? _welcomeName;
 
   Timer? _welcomeClockTimer;
 
   Future<void> reload() => _load();
 
+  Future<void> _openOrganizationPending() async {
+    final needsReload =
+        _orgItems.isEmpty && (_orgSummary?.pendingTotalCount ?? 0) > 0;
+    if (needsReload) {
+      await _load();
+      if (!mounted) return;
+    }
+    setState(() => _listMode = _HomePendingListMode.organization);
+  }
+
   /// Vuelve a la home solo con tarjetas KPI (quita listas). Útil con [IndexedStack]
-  /// al cambiar de tab: si no se llama, `_showDetail` queda en true y se ven listas.
+  /// al cambiar de tab: si no se llama, el modo lista queda activo.
   void showKpiDashboardOnly() {
     if (!mounted) return;
-    if (_showDetail) setState(() => _showDetail = false);
+    if (_listMode != _HomePendingListMode.dashboard) {
+      setState(() => _listMode = _HomePendingListMode.dashboard);
+    }
   }
 
   Future<void> _load() async {
@@ -113,6 +149,7 @@ class HomePendingPageState extends State<HomePendingPage> {
         _hallazgosSummary = data.hallazgosSummary;
         _myItems = data.myItems;
         _owedItems = data.owedItems;
+        _orgItems = data.organizationItems;
         _loading = false;
       });
     } on MobileApiException catch (e) {
@@ -162,29 +199,15 @@ class HomePendingPageState extends State<HomePendingPage> {
     String title,
     int count, {
     double top = 20,
+    IconData icon = Icons.inbox_rounded,
+    Color? accentColor,
   }) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, top, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$count ${count == 1 ? 'ítem' : 'ítems'}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return AppSectionHeader(
+      title: title,
+      count: count,
+      icon: icon,
+      topPadding: top,
+      accentColor: accentColor,
     );
   }
 
@@ -193,35 +216,16 @@ class HomePendingPageState extends State<HomePendingPage> {
     final line = name != null && name.isNotEmpty
         ? 'Bienvenido, $name'
         : 'Bienvenido';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            line,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            DateUtilsApp.formatNowLocal(),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-          ),
-        ],
-      ),
+    return AppWelcomeBanner(
+      greeting: line,
+      subtitle: DateUtilsApp.formatNowLocal(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: SimLoadingIndicator());
     }
     if (_error != null) {
       return Center(
@@ -243,13 +247,14 @@ class HomePendingPageState extends State<HomePendingPage> {
     final org = _orgSummary!;
     final nc = _hallazgosSummary!;
 
-    if (!_showDetail) {
-      return RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
+    if (_listMode == _HomePendingListMode.dashboard) {
+      return AppScreenBackdrop(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
             _buildWelcomeHeader(context),
             KpiSummaryCard(
               title: 'Mis pendientes',
@@ -265,10 +270,10 @@ class HomePendingPageState extends State<HomePendingPage> {
               ),
               icon: Icons.assignment_outlined,
               accentColor: Colors.amber.shade800,
-              onTap: () => setState(() => _showDetail = true),
+              onTap: () => setState(() => _listMode = _HomePendingListMode.personal),
             ),
             KpiSummaryCard(
-              title: 'Pendientes de la empresa activa',
+              title: 'Pendientes Generales',
               labelLeft: 'Total en colas',
               countLeft: org.pendingTotalCount,
               delayedLeft: org.pendingDelayedCount,
@@ -278,6 +283,7 @@ class HomePendingPageState extends State<HomePendingPage> {
               ),
               icon: Icons.corporate_fare_outlined,
               accentColor: Theme.of(context).colorScheme.primary,
+              onTap: () => _openOrganizationPending(),
             ),
             KpiSummaryCard(
               title: 'Hallazgos (NC)',
@@ -293,30 +299,85 @@ class HomePendingPageState extends State<HomePendingPage> {
               onTap: widget.onOpenHallazgos,
             ),
           ],
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+    if (_listMode == _HomePendingListMode.organization) {
+      return AppScreenBackdrop(
+        child: RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: AppPageHeader(
+                title: 'Pendientes Generales',
+                subtitle: '${_orgSummary?.pendingTotalCount ?? 0} en colas de la empresa',
+                onBack: () => setState(
+                  () => _listMode = _HomePendingListMode.dashboard,
+                ),
+                accentColor: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            SliverToBoxAdapter(
+            child: _buildSectionTitle(
+              context,
+              'Pendientes Generales',
+              _orgItems.length,
+              top: 12,
+              icon: Icons.corporate_fare_rounded,
+              accentColor: Theme.of(context).colorScheme.primary,
+            ),
+            ),
+            if (_orgItems.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    (_orgSummary?.pendingTotalCount ?? 0) > 0
+                        ? 'El resumen indica ${_orgSummary!.pendingTotalCount} pendientes, '
+                            'pero no se recibió el detalle. Deslice hacia abajo para '
+                            'recargar y compruebe que el servidor SIM esté actualizado.'
+                        : 'No hay ítems en las colas de la empresa activa.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _PendingTile(
+                    row: _orgItems[index],
+                    onPendingRefresh: _load,
+                  ),
+                  childCount: _orgItems.length,
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ],
+        ),
+        ),
+      );
+    }
+
+    return AppScreenBackdrop(
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => setState(() => _showDetail = false),
-                  ),
-                  Text(
-                    'Mis pendientes',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ],
+            child: AppPageHeader(
+              title: 'Mis pendientes',
+              subtitle: '${_summary?.myPendingCount ?? 0} personales · ${_owedItems.length} me deben',
+              onBack: () => setState(
+                () => _listMode = _HomePendingListMode.dashboard,
               ),
+              accentColor: Colors.amber.shade800,
             ),
           ),
           SliverToBoxAdapter(
@@ -325,6 +386,8 @@ class HomePendingPageState extends State<HomePendingPage> {
               'Mis Pendientes',
               _myItems.length,
               top: 12,
+              icon: Icons.assignment_rounded,
+              accentColor: Colors.amber.shade800,
             ),
           ),
           if (_myItems.isEmpty)
@@ -344,7 +407,7 @@ class HomePendingPageState extends State<HomePendingPage> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) => _PendingTile(
                   row: _myItems[index],
-                  onCompleted: _load,
+                  onPendingRefresh: _load,
                 ),
                 childCount: _myItems.length,
               ),
@@ -354,6 +417,8 @@ class HomePendingPageState extends State<HomePendingPage> {
               context,
               'Pendientes que me deben',
               _owedItems.length,
+              icon: Icons.people_outline_rounded,
+              accentColor: const Color(0xFF0D9488),
             ),
           ),
           if (_owedItems.isEmpty)
@@ -373,13 +438,14 @@ class HomePendingPageState extends State<HomePendingPage> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) => _OwedTile(
                   row: _owedItems[index],
-                  onCompleted: _load,
+                  onPendingRefresh: _load,
                 ),
                 childCount: _owedItems.length,
               ),
             ),
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
         ],
+        ),
       ),
     );
   }
@@ -397,12 +463,30 @@ String _misPendientesPlazoCol1(PendingRow row, int? plazoDays) {
   return '${words.substring(0, 14)}…';
 }
 
+bool _isPlaceholderPerson(String value) {
+  final v = value.trim();
+  return v.isEmpty || v == '-';
+}
+
+String _pendingHolderLabel(PendingRow row) {
+  final name = row.responsible.trim();
+  final role = row.holderRole.trim();
+  if (_isPlaceholderPerson(name)) {
+    final r = role.isNotEmpty ? role : 'Responsable';
+    return '$r: Sin asignar';
+  }
+  if (role.isEmpty) return name;
+  return '$role: $name';
+}
+
 String? _misPendientesRow2Meta(PendingRow row, int? plazoDays) {
-  final cat = row.category.trim();
   final alert = row.alertText.trim();
 
-  final headParts = <String>[];
-  if (cat.isNotEmpty) headParts.add(cat);
+  final headParts = <String>[_pendingHolderLabel(row)];
+  final pos = row.position.trim();
+  if (pos.isNotEmpty && pos != '-') {
+    headParts.add(pos);
+  }
   final head = headParts.join(' · ');
 
   var showAlert = alert.isNotEmpty;
@@ -461,289 +545,72 @@ String _owedPlazoCol1(OwedRow row, int? plazoDays) {
 
 class _PendingTile extends StatelessWidget {
   final PendingRow row;
-  final VoidCallback? onCompleted;
+  final Future<void> Function()? onPendingRefresh;
 
-  const _PendingTile({required this.row, this.onCompleted});
+  const _PendingTile({
+    required this.row,
+    this.onPendingRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final variant = theme.colorScheme.onSurfaceVariant;
     final plazoDays = pendingPlazoDays(endIso: row.endIso, alertText: row.alertText);
     final plazoLabel = _misPendientesPlazoCol1(row, plazoDays);
     final metaLine = _misPendientesRow2Meta(row, plazoDays);
-    final plazoStyle = theme.textTheme.labelLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      height: 1.2,
-      color: row.isDelayed ? theme.colorScheme.error : theme.colorScheme.primary,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    final openIcon = Icon(
-      row.mobileInApp ? Icons.touch_app : Icons.open_in_new,
-      color: row.isDelayed ? Colors.red : variant,
-      size: row.isDelayed ? 20 : 18,
-    );
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: InkWell(
-        onTap: () => _openPendingItem(
-          context,
-          mobileInApp: row.mobileInApp,
-          mobileAction: row.mobileAction,
-          mobileObjectId: row.mobileObjectId,
-          subtitle: row.title,
-          editUrl: row.editUrl,
-          simViewUrl: row.simViewUrl,
-          onCompleted: onCompleted,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Table(
-                columnWidths: const {
-                  0: FixedColumnWidth(94),
-                  1: FlexColumnWidth(),
-                },
-                defaultVerticalAlignment: TableCellVerticalAlignment.top,
-                children: [
-                  TableRow(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6, top: 2),
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            plazoLabel,
-                            textAlign: TextAlign.right,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: plazoStyle,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: theme.dividerColor.withValues(alpha: 0.85),
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12, right: 4),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    row.title,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.25,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2, left: 6),
-                                  child: openIcon,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (metaLine != null && metaLine.isNotEmpty)
-                    TableRow(
-                      children: [
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 12, top: 6),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              if (row.isDelayed)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: Icon(
-                                    Icons.warning_amber_rounded,
-                                    size: 18,
-                                    color: Colors.red.shade700,
-                                  ),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  metaLine,
-                                  maxLines: 4,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:
-                                      theme.textTheme.labelMedium?.copyWith(
-                                    color:
-                                        row.isDelayed && plazoDays == null
-                                            ? Colors.red
-                                            : variant,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ),
-      );
+    return AppActionListTile(
+      title: row.title,
+      category: row.category,
+      leadingLabel: plazoLabel,
+      subtitle: metaLine,
+      isDelayed: row.isDelayed,
+      inApp: row.mobileInApp,
+      onTap: () => _openPendingItem(
+        context,
+        mobileInApp: row.mobileInApp,
+        mobileAction: row.mobileAction,
+        mobileObjectId: row.mobileObjectId,
+        subtitle: row.title,
+        editUrl: row.editUrl,
+        simViewUrl: row.simViewUrl,
+        onPendingRefresh: onPendingRefresh,
+      ),
+    );
   }
 }
 
 class _OwedTile extends StatelessWidget {
   final OwedRow row;
-  final VoidCallback? onCompleted;
+  final Future<void> Function()? onPendingRefresh;
 
-  const _OwedTile({required this.row, this.onCompleted});
+  const _OwedTile({
+    required this.row,
+    this.onPendingRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final variant = theme.colorScheme.onSurfaceVariant;
     final plazoDays = pendingPlazoDays(endIso: row.endIso, alertText: row.alertText);
     final plazoLabel = _owedPlazoCol1(row, plazoDays);
     final metaLine = _owedRow2Meta(row, plazoDays);
-    final plazoStyle = theme.textTheme.labelLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      height: 1.2,
-      color: row.isDelayed ? theme.colorScheme.error : theme.colorScheme.primary,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    final openIcon = Icon(
-      row.mobileInApp ? Icons.touch_app : Icons.open_in_new,
-      color: row.isDelayed ? Colors.red : variant,
-      size: row.isDelayed ? 20 : 18,
-    );
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: InkWell(
-        onTap: () => _openPendingItem(
-          context,
-          mobileInApp: row.mobileInApp,
-          mobileAction: row.mobileAction,
-          mobileObjectId: row.mobileObjectId,
-          subtitle: row.title,
-          editUrl: row.editUrl,
-          simViewUrl: row.simViewUrl,
-          onCompleted: onCompleted,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Table(
-            columnWidths: const {
-              0: FixedColumnWidth(94),
-              1: FlexColumnWidth(),
-            },
-            defaultVerticalAlignment: TableCellVerticalAlignment.top,
-            children: [
-              TableRow(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6, top: 2),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        plazoLabel,
-                        textAlign: TextAlign.right,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: plazoStyle,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          left: BorderSide(
-                            color: theme.dividerColor.withValues(alpha: 0.85),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 12, right: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                row.title,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.25,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2, left: 6),
-                              child: openIcon,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (metaLine != null && metaLine.isNotEmpty)
-                TableRow(
-                  children: [
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 12, top: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (row.isDelayed)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Icon(
-                                Icons.warning_amber_rounded,
-                                size: 18,
-                                color: Colors.red.shade700,
-                              ),
-                            ),
-                          Expanded(
-                            child: Text(
-                              metaLine,
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: row.isDelayed && plazoDays == null
-                                    ? Colors.red
-                                    : variant,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
+    return AppActionListTile(
+      title: row.title,
+      category: row.kind,
+      leadingLabel: plazoLabel,
+      subtitle: metaLine,
+      isDelayed: row.isDelayed,
+      inApp: row.mobileInApp,
+      accentColor: const Color(0xFF0D9488),
+      onTap: () => _openPendingItem(
+        context,
+        mobileInApp: row.mobileInApp,
+        mobileAction: row.mobileAction,
+        mobileObjectId: row.mobileObjectId,
+        subtitle: row.title,
+        editUrl: row.editUrl,
+        simViewUrl: row.simViewUrl,
+        onPendingRefresh: onPendingRefresh,
       ),
     );
   }

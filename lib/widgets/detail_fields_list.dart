@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../util/plain_text.dart';
+import '../core/widgets/mobile_detail/detail_rational_section.dart';
+import '../core/widgets/mobile_detail/detail_section_card.dart';
 
 /// Lista etiqueta / valor devuelta por la API móvil (`fields`).
 class DetailFieldsList extends StatelessWidget {
@@ -8,10 +9,12 @@ class DetailFieldsList extends StatelessWidget {
     super.key,
     required this.fields,
     this.dense = false,
+    this.sectionTitle = 'Detalle',
   });
 
   final List<dynamic> fields;
   final bool dense;
+  final String sectionTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -19,38 +22,29 @@ class DetailFieldsList extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final theme = Theme.of(context);
-    final labelStyle = theme.textTheme.labelMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-      color: theme.colorScheme.primary,
-    );
-    final valueStyle = theme.textTheme.bodyMedium?.copyWith(height: 1.35);
+    final normalized = <Map<String, dynamic>>[];
+    for (final raw in fields) {
+      if (raw is! Map) continue;
+      final label = raw['label']?.toString() ?? '';
+      final value = raw['value']?.toString() ?? '';
+      if (label.isEmpty || value.isEmpty) continue;
+      final key = raw['key']?.toString();
+      final layout = raw['layout']?.toString();
+      final row = <String, dynamic>{
+        'label': label,
+        'value': value,
+      };
+      if (key != null && key.isNotEmpty) row['key'] = key;
+      if (layout != null && layout.isNotEmpty) row['layout'] = layout;
+      if (raw['raw'] != null) row['raw'] = raw['raw'];
+      normalized.add(row);
+    }
+    if (normalized.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final raw in fields) ...[
-          if (raw is Map) ...[
-            Padding(
-              padding: EdgeInsets.only(bottom: dense ? 8 : 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    plainText(raw['label']?.toString()),
-                    style: labelStyle,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    plainText(raw['value']?.toString()),
-                    style: valueStyle,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ],
+    return DetailSectionCard(
+      title: sectionTitle,
+      icon: Icons.list_alt_outlined,
+      child: DetailRationalSectionLayout(fields: normalized),
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/sim_loading_indicator.dart';
+
 import '../models/mobile_models.dart';
 import '../services/mobile_api_service.dart';
 import '../util/session_nav.dart';
@@ -93,7 +95,7 @@ class _NormaPageState extends State<NormaPage> {
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SimLoadingIndicator())
               : _error != null
                   ? Center(child: Text(_error!))
                   : _items.isEmpty

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme_mode.dart';
 import 'core/theme/sim_theme.dart';
-import 'screens/login_page.dart';
+import 'screens/app_entry.dart';
 
 void main() {
   runApp(const MyApp());
@@ -42,7 +42,7 @@ class _MyAppState extends State<MyApp> {
               child: child ?? const SizedBox.shrink(),
             );
           },
-          home: const LoginPage(),
+          home: const AppEntry(),
         );
       },
     );

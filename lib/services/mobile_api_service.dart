@@ -33,6 +33,26 @@ class MobileApiService {
     });
   }
 
+  static List<PendingRow> _parsePendingRows(
+    List<dynamic>? raw, {
+    Map<String, dynamic>? organizationSummaryMap,
+  }) {
+    var list = raw;
+    if ((list == null || list.isEmpty) && organizationSummaryMap != null) {
+      list = organizationSummaryMap['items'] as List<dynamic>?;
+    }
+    final out = <PendingRow>[];
+    for (final entry in list ?? const []) {
+      if (entry is! Map) continue;
+      try {
+        out.add(PendingRow.fromJson(Map<String, dynamic>.from(entry)));
+      } catch (_) {
+        // Fila mal formada: omitir sin tumbar el listado completo.
+      }
+    }
+    return out;
+  }
+
   static void _sortOwedRows(List<OwedRow> rows) {
     rows.sort((a, b) {
       final c = comparePlazoAscendingNullable(
@@ -42,6 +62,13 @@ class MobileApiService {
       if (c != 0) return c;
       return _cmpInsensitive(a.title, b.title);
     });
+  }
+
+  /// Cabeceras para medios (imágenes, PDF) con JWT y empresa activa.
+  Future<Map<String, String>> authHeadersForMedia() async {
+    final headers = await _headers();
+    headers.remove('Content-Type');
+    return headers;
   }
 
   Future<Map<String, String>> _headers() async {
@@ -191,32 +218,39 @@ class MobileApiService {
     HallazgosSummary hallazgosSummary,
     List<PendingRow> myItems,
     List<OwedRow> owedItems,
+    List<PendingRow> organizationItems,
   })> fetchHomePending() async {
     final response = await _get(ApiConfig.mobileHomePendingPath);
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final summary = PendingSummary.fromJson(
       data['summary'] as Map<String, dynamic>? ?? {},
     );
+    final organizationSummaryMap =
+        data['organization_summary'] as Map<String, dynamic>? ?? {};
     final organizationSummary = OrganizationSummary.fromJson(
-      data['organization_summary'] as Map<String, dynamic>? ?? {},
+      organizationSummaryMap,
     );
     final hallazgosSummary = HallazgosSummary.fromJson(
       data['hallazgos_summary'] as Map<String, dynamic>? ?? {},
     );
-    final myItems = (data['my_items'] as List<dynamic>? ?? [])
-        .map((e) => PendingRow.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final myItems = _parsePendingRows(data['my_items'] as List<dynamic>?);
     final owedItems = (data['owed_items'] as List<dynamic>? ?? [])
         .map((e) => OwedRow.fromJson(e as Map<String, dynamic>))
         .toList();
+    final organizationItems = _parsePendingRows(
+      data['organization_items'] as List<dynamic>?,
+      organizationSummaryMap: organizationSummaryMap,
+    );
     _sortPendingRows(myItems);
     _sortOwedRows(owedItems);
+    _sortPendingRows(organizationItems);
     return (
       summary: summary,
       organizationSummary: organizationSummary,
       hallazgosSummary: hallazgosSummary,
       myItems: myItems,
       owedItems: owedItems,
+      organizationItems: organizationItems,
     );
   }
 

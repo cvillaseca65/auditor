@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'ui/app_mesh_background.dart';
+
 import '../theme/app_tokens.dart';
 import '../theme/sim_theme.dart';
 
@@ -11,12 +13,15 @@ class AppPremiumCard extends StatelessWidget {
     this.padding,
     this.onTap,
     this.borderRadius,
+    this.accentColor,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
   final BorderRadius? borderRadius;
+  /// Franja superior con degradado (acento de sección).
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +33,22 @@ class AppPremiumCard extends StatelessWidget {
       child: child,
     );
 
+    final accent = accentColor;
+    final topStripe = accent != null
+        ? Container(
+            height: 6,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  accent,
+                  Color.lerp(accent, SimTheme.accentColor, 0.35)!,
+                  Color.lerp(accent, scheme.primary, 0.5)!,
+                ],
+              ),
+            ),
+          )
+        : null;
+
     return AnimatedContainer(
       duration: AppMotion.fast,
       curve: AppMotion.curve,
@@ -35,21 +56,37 @@ class AppPremiumCard extends StatelessWidget {
         color: scheme.surface,
         borderRadius: r,
         border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.65),
+          color: accent?.withValues(alpha: 0.28) ??
+              scheme.outlineVariant.withValues(alpha: 0.5),
         ),
-        boxShadow: AppShadows.card(context),
+        boxShadow: [
+          ...AppShadows.card(context, opacity: accent != null ? 1.25 : 1),
+          if (accent != null)
+            BoxShadow(
+              color: accent.withValues(alpha: 0.14),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: r,
         child: Material(
           color: Colors.transparent,
-          child: onTap == null
-              ? inner
-              : InkWell(
-                  onTap: onTap,
-                  borderRadius: r,
-                  child: inner,
-                ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (topStripe != null) topStripe,
+              onTap == null
+                  ? inner
+                  : InkWell(
+                      onTap: onTap,
+                      borderRadius: r,
+                      child: inner,
+                    ),
+            ],
+          ),
         ),
       ),
     );
@@ -64,11 +101,6 @@ class AppScreenBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: SimTheme.softScreenGradientOf(context),
-      ),
-      child: child,
-    );
+    return AppMeshBackground(child: child);
   }
 }

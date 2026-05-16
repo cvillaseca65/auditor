@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+
+import '../core/widgets/sim_loading_indicator.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
@@ -212,7 +214,7 @@ class _DashboardPageState extends State<DashboardPage> {
         break;
     }
 
-    if (isLoading) return const Center(child: CircularProgressIndicator());
+    if (isLoading) return const Center(child: SimLoadingIndicator());
     if (error.isNotEmpty) return Center(child: Text(error));
     if (data.isEmpty) return Center(child: Text(emptyMessage));
 
@@ -233,13 +235,13 @@ class _DashboardPageState extends State<DashboardPage> {
             subtitle: currentLevel == ViewLevel.audits && item['start'] != null
                 ? Text(
                     formatDate(item['start']),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
                   )
                 : currentLevel == ViewLevel.plans && item['moment'] != null
                     ? Text(
                         formatDate(item['moment']),
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           color: Colors.grey,
                         ),
                       )

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/motion/app_page_transitions.dart';
+import '../core/widgets/sim_loading_indicator.dart';
+import '../core/widgets/ui/app_visual_kit.dart';
+
 import '../models/mobile_models.dart';
 import '../services/mobile_api_service.dart';
 import 'documento_detail_page.dart';
@@ -93,39 +97,30 @@ class _DocumentosPageState extends State<DocumentosPage> {
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SimLoadingIndicator())
               : _error != null
                   ? Center(child: Text(_error!))
                   : _items.isEmpty
                       ? const Center(child: Text('Sin documentos'))
                       : RefreshIndicator(
                           onRefresh: _load,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.all(8),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(4, 8, 4, 24),
                             itemCount: _items.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final item = _items[index];
-                              return ListTile(
-                                title: Text(
-                                  '${item.code} ${item.title}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: Text(
-                                  '${item.documentType}'
-                                  '${item.publication.isNotEmpty ? '\n${item.publication}' : ''}',
-                                ),
-                                isThreeLine: true,
-                                trailing: const Icon(Icons.chevron_right),
+                              final sub = item.publication.isNotEmpty
+                                  ? '${item.documentType}\n${item.publication}'
+                                  : item.documentType;
+                              return AppEntityListTile(
+                                title: '${item.code} ${item.title}',
+                                subtitle: sub,
+                                leadingIcon: Icons.description_outlined,
                                 onTap: () {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (_) => DocumentoDetailPage(
-                                        documentId: item.id,
-                                      ),
+                                    AppPageTransitions.elegant(
+                                      DocumentoDetailPage(documentId: item.id),
                                     ),
                                   );
                                 },

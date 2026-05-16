@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/sim_loading_indicator.dart';
+
 import '../services/mobile_api_service.dart';
 import '../util/plain_text.dart';
 import '../util/open_sim_url.dart';
 import '../util/session_nav.dart';
+import '../core/widgets/mobile_detail/detail_prose_block.dart';
+import '../core/widgets/mobile_detail/detail_section_card.dart';
+import '../core/theme/app_tokens.dart';
 import '../widgets/relations_section.dart';
 
 class NormaDetailPage extends StatefulWidget {
@@ -65,7 +70,7 @@ class _NormaDetailPageState extends State<NormaDetailPage> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title, maxLines: 1)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SimLoadingIndicator())
           : _error != null
               ? Center(child: Text(_error!))
               : _buildBody(),
@@ -81,8 +86,17 @@ class _NormaDetailPageState extends State<NormaDetailPage> {
       children: [
         if (observation.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(observation),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+              0,
+            ),
+            child: DetailSectionCard(
+              title: 'Observación',
+              icon: Icons.notes_outlined,
+              child: DetailProseBlock(text: observation),
+            ),
           ),
         Expanded(
           child: ListView.builder(
@@ -105,20 +119,29 @@ class _NormaDetailPageState extends State<NormaDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (plainText(req['requirement']?.toString()).isNotEmpty)
-                            Text(plainText(req['requirement']?.toString())),
-                          if (plainText(req['comply_text']?.toString()).isNotEmpty) ...[
-                            const Divider(height: 20),
+                          if (plainText(req['requirement']?.toString()).isNotEmpty) ...[
                             Text(
-                              'Cumplimiento',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              'Requisito',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
                                     fontWeight: FontWeight.w700,
                                   ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 4),
+                            DetailProseBlock(
+                              text: plainText(req['requirement']?.toString()),
+                            ),
+                          ],
+                          if (plainText(req['comply_text']?.toString()).isNotEmpty) ...[
+                            const SizedBox(height: 12),
                             Text(
-                              plainText(req['comply_text']?.toString()),
-                              style: Theme.of(context).textTheme.bodyLarge,
+                              'Cumplimiento',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            DetailProseBlock(
+                              text: plainText(req['comply_text']?.toString()),
                             ),
                           ],
                           if (plainText(req['responsible']?.toString()).isNotEmpty)

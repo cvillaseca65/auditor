@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/sim_loading_indicator.dart';
+
 import '../core/theme/sim_theme.dart';
 import '../core/widgets/sim_branded_app_bar.dart';
 import '../models/mobile_models.dart';
@@ -96,7 +98,7 @@ class _CompanyPickerPageState extends State<CompanyPickerPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SimLoadingIndicator())
           : _error != null
               ? Center(
                   child: Padding(

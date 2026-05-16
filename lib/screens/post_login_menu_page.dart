@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../core/widgets/sim_loading_indicator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/sim_theme.dart';
@@ -70,7 +72,7 @@ class _PostLoginMenuPageState extends State<PostLoginMenuPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SimLoadingIndicator())
           : SafeArea(
               child: Center(
                 child: SingleChildScrollView(

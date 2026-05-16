@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 
 /// Espaciado y radios consistentes (estilo producto tipo Linear / Stripe).
+/// Tamaños mínimos legibles en móvil (no usar por debajo en UI de lectura).
+abstract final class AppTypography {
+  static const double minCaption = 13;
+  static const double minLabel = 14;
+  static const double minBodySecondary = 14;
+  static const double navBarLabel = 13;
+}
+
 abstract final class AppSpacing {
   static const double xxs = 4;
   static const double xs = 8;
@@ -21,8 +29,11 @@ abstract final class AppRadii {
 
 abstract final class AppMotion {
   static const Duration fast = Duration(milliseconds: 180);
-  static const Duration medium = Duration(milliseconds: 320);
+  static const Duration medium = Duration(milliseconds: 380);
+  static const Duration slow = Duration(milliseconds: 520);
+  static const Duration staggerStep = Duration(milliseconds: 55);
   static const Curve curve = Curves.easeOutCubic;
+  static const Curve emphasis = Curves.easeOutQuart;
 }
 
 abstract final class AppShadows {

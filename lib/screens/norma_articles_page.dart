@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/sim_loading_indicator.dart';
+
 import '../services/mobile_api_service.dart';
 import '../util/plain_text.dart';
 import '../util/session_nav.dart';
@@ -70,7 +72,7 @@ class _NormaArticlesPageState extends State<NormaArticlesPage> {
         title: Text(widget.title, maxLines: 1),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SimLoadingIndicator())
           : _error != null
               ? Center(child: Text(_error!))
               : _buildList(),
@@ -114,7 +116,7 @@ class _NormaArticlesPageState extends State<NormaArticlesPage> {
                 leading: CircleAvatar(
                   child: Text(
                     index.isNotEmpty ? index : '?',
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: 14),
                   ),
                 ),
                 title: Text(

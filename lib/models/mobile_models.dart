@@ -80,6 +80,8 @@ class PendingRow {
   final String category;
   final String title;
   final String responsible;
+  final String holderRole;
+  final String position;
   final String alertText;
   final bool isDelayed;
   final String editUrl;
@@ -93,6 +95,8 @@ class PendingRow {
     required this.category,
     required this.title,
     required this.responsible,
+    this.holderRole = '',
+    this.position = '',
     required this.alertText,
     required this.isDelayed,
     required this.editUrl,
@@ -108,6 +112,8 @@ class PendingRow {
       category: plainText(json['category'] as String?),
       title: plainText(json['title'] as String?),
       responsible: plainText(json['responsible'] as String?),
+      holderRole: plainText(json['holder_role'] as String?),
+      position: plainText(json['position'] as String?),
       alertText: plainText(json['alert_text'] as String?),
       isDelayed: json['is_delayed'] as bool? ?? false,
       editUrl: json['edit_url'] as String? ?? '',

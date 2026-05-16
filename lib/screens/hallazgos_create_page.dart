@@ -2,6 +2,8 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../core/widgets/sim_loading_indicator.dart';
 import '../services/nc_hallazgos_service.dart';
 import '../services/session_service.dart';
 import '../util/file_bytes.dart';
@@ -329,7 +331,7 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
     if (_loadingCompanies) {
       return Scaffold(
         appBar: _hallazgosAppBar(),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: SimLoadingIndicator()),
       );
     }
 
@@ -403,10 +405,12 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
               ),
             const SizedBox(height: 16),
             if (_loadingOptions)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              ))
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: SimLoadingIndicator(),
+                ),
+              )
             else if (_options != null) ...[
               ListTile(
                 title: const Text('Fecha'),
@@ -573,14 +577,7 @@ class _HallazgosCreatePageState extends State<HallazgosCreatePage> {
                 child: ElevatedButton(
                   onPressed: _submitting ? null : _submit,
                   child: _submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
+                      ? const SimLoadingIndicator.compact()
                       : const Text('Guardar hallazgo'),
                 ),
               ),

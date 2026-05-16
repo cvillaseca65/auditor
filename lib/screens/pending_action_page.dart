@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/content_text.dart';
+import '../core/widgets/app_premium_card.dart';
+import '../core/widgets/mobile_detail/detail_attachments_section.dart';
+import '../core/widgets/mobile_detail/detail_date_format.dart';
+import '../core/widgets/mobile_detail/detail_fields_compact.dart';
+import '../core/widgets/mobile_detail/detail_rational_section.dart';
+import '../core/widgets/mobile_detail/detail_map_fields.dart';
+import '../core/widgets/mobile_detail/detail_section_card.dart';
+import '../core/widgets/mobile_detail/detail_utils.dart';
+import '../core/theme/app_tokens.dart';
+import '../core/widgets/sim_loading_indicator.dart';
 import '../services/mobile_api_service.dart';
 import '../util/open_sim_url.dart';
 import '../util/session_nav.dart';
@@ -15,7 +26,7 @@ class PendingActionPage extends StatefulWidget {
     required this.subtitle,
     this.fallbackUrl,
     this.simViewUrl,
-    this.onCompleted,
+    this.onPendingRefresh,
   });
 
   final String actionType;
@@ -25,7 +36,8 @@ class PendingActionPage extends StatefulWidget {
   final String? fallbackUrl;
   /// Vista solo lectura en SIM (p. ej. task/detail) — preferida para enlaces externos.
   final String? simViewUrl;
-  final VoidCallback? onCompleted;
+  /// Tras guardar en BD: recargar listados padre (misma idea que recargar en web).
+  final Future<void> Function()? onPendingRefresh;
 
   @override
   State<PendingActionPage> createState() => _PendingActionPageState();
@@ -72,7 +84,8 @@ class _PendingActionPageState extends State<PendingActionPage> {
     'date',
     'deadline_days',
     'deatline',
-    'ac',
+    'alert_text',
+    'action_kind',
     'probability',
     'residual_probability',
     'imp',
@@ -160,7 +173,8 @@ class _PendingActionPageState extends State<PendingActionPage> {
     'date': 'Fecha',
     'deadline_days': 'Plazo',
     'deatline': 'Plazo',
-    'ac': 'Tipo acción',
+    'alert_text': 'Plazo',
+    'action_kind': 'Tipo acción (hallazgo)',
     'probability': 'Probabilidad %',
     'residual_probability': 'Prob. residual %',
     'imp': 'Impacto',
@@ -210,39 +224,56 @@ class _PendingActionPageState extends State<PendingActionPage> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  /// Recarga el formulario desde el servidor. Devuelve false si ya no hay acción in-app.
+  Future<bool> _reloadFromServer({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final data = await _api.fetchPendingAction(
         widget.actionType,
         widget.objectId,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _payload = data;
         _loading = false;
+        _error = null;
       });
       _applyPayloadValues(data);
+      return true;
     } on MobileApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       if (e.statusCode == 401) {
         await navigateToLogin(context);
-        return;
+        return false;
+      }
+      final viewUrl = widget.simViewUrl?.trim() ?? '';
+      if (e.statusCode == 403 && viewUrl.isNotEmpty && showLoading) {
+        await openSimUrl(viewUrl);
+        if (mounted) Navigator.of(context).pop();
+        return false;
       }
       setState(() {
         _loading = false;
         _error = e.message;
       });
+      return false;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _loading = false;
         _error = e.toString();
       });
+      return false;
     }
+  }
+
+  Future<void> _load() async {
+    await _reloadFromServer(showLoading: true);
   }
 
   String get _mode => _payload?['mode'] as String? ?? '';
@@ -279,14 +310,31 @@ class _PendingActionPageState extends State<PendingActionPage> {
         .toList();
   }
 
-  static String _formatDetailValue(String key, dynamic raw) {
+  static String _formatDetailValue(
+    String key,
+    dynamic raw,
+    Map<String, dynamic> detail,
+  ) {
     if (raw == null) return '';
+    if (key == 'ac') {
+      final ncId = detail['nc_id'];
+      if (ncId == null || ncId == false || ncId == 0) return '';
+    }
+    if (key == 'action_kind') {
+      final label = raw.toString().trim();
+      if (label.isEmpty) return '';
+      if (label == 'AC') return 'Acción correctiva (AC)';
+      if (label == 'AP') return 'Acción inmediata (AP)';
+      return label;
+    }
     if ((raw is int || raw is num) &&
         (key == 'deatline' || key == 'deadline_days')) {
       return raw.toString();
     }
     if (raw is bool) {
       if (key == 'ac') {
+        final ncId = detail['nc_id'];
+        if (ncId == null || ncId == false || ncId == 0) return '';
         return raw ? 'Acción correctiva (AC)' : 'Acción inmediata (AP)';
       }
       if (key == 'view') {
@@ -299,113 +347,84 @@ class _PendingActionPageState extends State<PendingActionPage> {
     }
     final s = raw.toString().trim();
     if (s.isEmpty) return '';
-    final iso = DateTime.tryParse(s);
-    if (iso != null) {
-      return '${iso.day.toString().padLeft(2, '0')}/'
-          '${iso.month.toString().padLeft(2, '0')}/${iso.year}';
-    }
+    final formatted = DetailDateFormat.formatField(key, raw);
+    if (formatted.isNotEmpty) return formatted;
     return s;
+  }
+
+  String _detailLabelFor(String key) {
+    if (widget.actionType == 'minute') {
+      if (key == 'start') return 'Fecha de inicio';
+      if (key == 'end') return 'Término';
+    }
+    return _detailLabels[key] ?? _humanizeKey(key);
   }
 
   Widget _buildContextCard(
     Map<String, dynamic> detail, {
     String? fallbackTitle,
   }) {
-    final theme = Theme.of(context);
-    final seen = <String>{};
-    final rows = <Widget>[];
+    final fields = detailMapToFields(
+      detail: detail,
+      formatValue: (key, value) {
+        final text = _formatDetailValue(key, value, detail);
+        return text.isEmpty ? null : text;
+      },
+      labelFor: _detailLabelFor,
+      preferredOrder: _detailOrder,
+    );
 
-    void addRow(String key, dynamic value) {
-      if (key == 'display_key_order') return;
-      final text = _formatDetailValue(key, value);
-      if (text.isEmpty) return;
-      final label = _detailLabels[key] ?? _humanizeKey(key);
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              SelectableText(text, style: theme.textTheme.bodyMedium),
-            ],
-          ),
+    if (fields.isEmpty) {
+      final fb = (fallbackTitle ?? '').trim();
+      if (fb.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DetailSectionCard(
+          title: 'Datos del registro',
+          icon: Icons.article_outlined,
+          child: SelectableText(fb, style: ContentText.fieldValue(context)),
         ),
       );
     }
 
-    final explicitOrder = detail['display_key_order'];
-    if (explicitOrder is List<dynamic>) {
-      for (final rawKey in explicitOrder) {
-        if (rawKey is! String) continue;
-        if (!detail.containsKey(rawKey)) continue;
-        seen.add(rawKey);
-        addRow(rawKey, detail[rawKey]);
-      }
-    } else {
-      for (final key in _detailOrder) {
-        if (!detail.containsKey(key)) continue;
-        seen.add(key);
-        addRow(key, detail[key]);
-      }
-    }
-    for (final e in detail.entries) {
-      if (e.key == 'display_key_order') continue;
-      if (seen.contains(e.key)) continue;
-      addRow(e.key, e.value);
+    if (widget.actionType == 'task') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DetailSectionCard(
+          title: 'Tarea',
+          icon: Icons.assignment_outlined,
+          accentColor: Colors.amber.shade800,
+          child: DetailRationalSectionLayout(fields: fields),
+        ),
+      );
     }
 
-    if (rows.isEmpty) {
-      final fb = (fallbackTitle ?? '').trim();
-      if (fb.isNotEmpty) {
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Datos del registro',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SelectableText(fb, style: theme.textTheme.bodyMedium),
-              ],
+    if (widget.actionType == 'minute') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DetailSectionCard(
+          title: 'Minuta',
+          icon: Icons.event_note_outlined,
+          accentColor: Theme.of(context).colorScheme.tertiary,
+          child: DetailRationalSectionLayout(fields: fields),
+        ),
+      );
+    }
+
+    final sections = groupDetailFields(fields);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final section in sections)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DetailSectionCard(
+              title: section.title,
+              icon: section.icon,
+              child: DetailRationalSectionLayout(fields: section.fields),
             ),
           ),
-        );
-      }
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Datos del registro',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...rows,
-          ],
-        ),
-      ),
+      ],
     );
   }
 
@@ -419,15 +438,18 @@ class _PendingActionPageState extends State<PendingActionPage> {
       );
       if (!mounted) return;
       if (result['done'] == true) {
-        widget.onCompleted?.call();
+        final message = result['message']?.toString() ?? 'Listo';
+        await widget.onPendingRefresh?.call();
         if (!mounted) return;
+        final stillInApp = await _reloadFromServer(showLoading: false);
+        if (!mounted) return;
+        setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result['message']?.toString() ?? 'Listo',
-            ),
-          ),
+          SnackBar(content: Text(message)),
         );
+        if (stillInApp) {
+          return;
+        }
         Navigator.of(context).pop(true);
         return;
       }
@@ -556,7 +578,7 @@ class _PendingActionPageState extends State<PendingActionPage> {
               ? const SizedBox(
                   height: 22,
                   width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: const SimLoadingIndicator.compact(),
                 )
               : const Text('Marcar como leído'),
         ),
@@ -571,7 +593,9 @@ class _PendingActionPageState extends State<PendingActionPage> {
         for (final q in _testQuestions) ...[
           Text(
             q['question'] as String? ?? '',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: ContentText.bodyLarge(context)?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           ...((q['alternatives'] as List<dynamic>? ?? []).map((alt) {
@@ -596,7 +620,7 @@ class _PendingActionPageState extends State<PendingActionPage> {
               ? const SizedBox(
                   height: 22,
                   width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: const SimLoadingIndicator.compact(),
                 )
               : const Text('Enviar respuestas'),
         ),
@@ -605,32 +629,39 @@ class _PendingActionPageState extends State<PendingActionPage> {
   }
 
   Widget _buildReport() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _reportController,
-          decoration: const InputDecoration(
-            labelText: 'Informe de ejecución',
-            border: OutlineInputBorder(),
+    return DetailSectionCard(
+      title: 'Ejecución',
+      icon: Icons.playlist_add_check_outlined,
+      accentColor: Theme.of(context).colorScheme.primary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _reportController,
+            decoration: const InputDecoration(
+              labelText: 'Informe de ejecución',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+            maxLines: 5,
           ),
-          maxLines: 5,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _costController,
-          decoration: const InputDecoration(
-            labelText: 'Costo (opcional)',
-            border: OutlineInputBorder(),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _costController,
+            decoration: const InputDecoration(
+              labelText: 'Costo (opcional)',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        ),
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: _saving ? null : _submitReport,
-          child: const Text('Reportar ejecución'),
-        ),
-      ],
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            onPressed: _saving ? null : _submitReport,
+            child: const Text('Reportar ejecución'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -675,7 +706,7 @@ class _PendingActionPageState extends State<PendingActionPage> {
               ? const SizedBox(
                   height: 22,
                   width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: const SimLoadingIndicator.compact(),
                 )
               : const Text('Registrar verificación'),
         ),
@@ -684,99 +715,116 @@ class _PendingActionPageState extends State<PendingActionPage> {
   }
 
   Widget _buildVerify({bool showReport = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showReport) ...[
-          TextField(
-            controller: _reportController,
-            decoration: const InputDecoration(
-              labelText: 'Informe (opcional)',
-              border: OutlineInputBorder(),
+    return DetailSectionCard(
+      title: 'Verificación',
+      icon: Icons.fact_check_outlined,
+      accentColor: Theme.of(context).colorScheme.tertiary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showReport) ...[
+            TextField(
+              controller: _reportController,
+              decoration: const InputDecoration(
+                labelText: 'Informe (opcional)',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              maxLines: 3,
             ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 12),
-        ],
-        Text(
-          'Eficaz',
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-        SegmentedButton<bool>(
-          emptySelectionAllowed: true,
-          segments: const [
-            ButtonSegment(value: true, label: Text('Sí')),
-            ButtonSegment(value: false, label: Text('No')),
+            const SizedBox(height: AppSpacing.sm),
           ],
-          selected: _effective == null ? <bool>{} : {_effective!},
-          onSelectionChanged: _saving
-              ? null
-              : (s) =>
-                  setState(() => _effective = s.isEmpty ? null : s.first),
-        ),
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: _saving ? null : _submitVerify,
-          child: const Text('Registrar verificación'),
-        ),
-      ],
+          Text(
+            '¿Fue eficaz?',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            emptySelectionAllowed: true,
+            segments: const [
+              ButtonSegment(value: true, label: Text('Sí')),
+              ButtonSegment(value: false, label: Text('No')),
+            ],
+            selected: _effective == null ? <bool>{} : {_effective!},
+            onSelectionChanged: _saving
+                ? null
+                : (s) =>
+                    setState(() => _effective = s.isEmpty ? null : s.first),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            onPressed: _saving ? null : _submitVerify,
+            child: const Text('Registrar verificación'),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildCloseMinute() {
     final values = _payload?['values'] as Map<String, dynamic>? ?? {};
-    final start = values['start']?.toString();
-    final end = values['end']?.toString();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (start != null && start.isNotEmpty)
-          Text('Inicio: $start', style: Theme.of(context).textTheme.bodySmall),
-        if (end != null && end.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text('Fin: $end', style: Theme.of(context).textTheme.bodySmall),
+    final startRaw = values['start']?.toString() ?? '';
+    final endRaw = values['end']?.toString() ?? '';
+    final scheme = Theme.of(context).colorScheme;
+
+    return DetailSectionCard(
+      title: 'Cerrar minuta',
+      icon: Icons.edit_note_outlined,
+      accentColor: scheme.tertiary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (startRaw.isNotEmpty && endRaw.isNotEmpty) ...[
+            DetailStartEndPeriodRow(
+              startRaw: startRaw,
+              endRaw: endRaw,
+              scheme: scheme,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          TextField(
+            controller: _subjectController,
+            decoration: const InputDecoration(
+              labelText: 'Asunto *',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 3,
           ),
-        TextField(
-          controller: _subjectController,
-          decoration: const InputDecoration(
-            labelText: 'Asunto *',
-            border: OutlineInputBorder(),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _agreementController,
+            decoration: const InputDecoration(
+              labelText: 'Acuerdos *',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+            maxLines: 6,
+            minLines: 3,
           ),
-          maxLines: 3,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _agreementController,
-          decoration: const InputDecoration(
-            labelText: 'Acuerdos *',
-            border: OutlineInputBorder(),
-            alignLabelWithHint: true,
+          const SizedBox(height: 12),
+          TextField(
+            controller: _observationController,
+            decoration: const InputDecoration(
+              labelText: 'Observación',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 4,
           ),
-          maxLines: 6,
-          minLines: 3,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _observationController,
-          decoration: const InputDecoration(
-            labelText: 'Observación',
-            border: OutlineInputBorder(),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            onPressed: _saving ? null : _submitCloseMinute,
+            child: _saving
+                ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: SimLoadingIndicator.compact(),
+                  )
+                : const Text('Cerrar minuta'),
           ),
-          maxLines: 4,
-        ),
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: _saving ? null : _submitCloseMinute,
-          child: _saving
-              ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Cerrar minuta'),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -795,11 +843,55 @@ class _PendingActionPageState extends State<PendingActionPage> {
         return _buildVerify(showReport: !isTask);
       case 'verify_risk':
         return _buildVerifyRisk();
+      case 'view':
+        return _buildViewOnly();
       default:
         return Center(
           child: Text('Modo no reconocido: $_mode'),
         );
     }
+  }
+
+  Widget _buildViewOnly() {
+    final msg = _payload?['view_only_message'] as String? ??
+        'Pendiente de acción de otra persona. Consulte el detalle arriba '
+        'o abra el registro en SIM.';
+    final viewUrl = widget.simViewUrl?.trim() ?? '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    msg,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (viewUrl.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => openSimUrl(viewUrl),
+            icon: const Icon(Icons.open_in_browser),
+            label: const Text('Abrir vista en SIM'),
+          ),
+        ],
+      ],
+    );
   }
 
   List<Widget> _scrollChildren() {
@@ -813,15 +905,24 @@ class _PendingActionPageState extends State<PendingActionPage> {
         ),
       );
     }
-    if (_mode == 'verify' || _mode == 'verify_risk') {
+    final attachments = DetailUtils.normalizeAttachments(
+      _payload?['attachments'] as List<dynamic>?,
+    );
+    if (attachments.isNotEmpty) {
       list.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
+          child: DetailAttachmentsSection(files: attachments),
+        ),
+      );
+    }
+    if (_mode == 'verify_risk') {
+      list.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: Text(
-            _mode == 'verify_risk'
-                ? 'Verificación de riesgo: el bloque superior resume el registro como en SIM. El informe de verificación es obligatorio.'
-                : 'Verifique la eficacia en relación con el contexto mostrado arriba (mismo criterio que en SIM).',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            'El informe de verificación es obligatorio.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
@@ -856,7 +957,7 @@ class _PendingActionPageState extends State<PendingActionPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SimLoadingIndicator())
           : _error != null
               ? Center(
                   child: Padding(
@@ -874,11 +975,18 @@ class _PendingActionPageState extends State<PendingActionPage> {
                     ),
                   ),
                 )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: _scrollChildren(),
+              : AppScreenBackdrop(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.sm,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _scrollChildren(),
+                    ),
                   ),
                 ),
     );

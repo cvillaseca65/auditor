@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../motion/app_page_transitions.dart';
 import 'app_tokens.dart';
 
 /// Identidad SIM + Material 3 (claro / oscuro) con tipografía limpia.
@@ -66,7 +67,8 @@ class SimTheme {
         ? Typography.blackMountainView
         : Typography.whiteMountainView;
 
-    final textTheme = GoogleFonts.interTextTheme(baseText).copyWith(
+    final inter = GoogleFonts.interTextTheme(baseText);
+    final textTheme = GoogleFonts.plusJakartaSansTextTheme(inter).copyWith(
       titleLarge: baseText.titleLarge?.copyWith(
         fontWeight: FontWeight.w700,
         letterSpacing: -0.35,
@@ -79,11 +81,33 @@ class SimTheme {
       titleSmall: baseText.titleSmall?.copyWith(
         fontWeight: FontWeight.w600,
       ),
-      bodyLarge: baseText.bodyLarge?.copyWith(height: 1.4),
-      bodyMedium: baseText.bodyMedium?.copyWith(height: 1.4),
+      // Contenido legible (detalle, listas, lecturas): un poco más grande que UI.
+      bodyLarge: baseText.bodyLarge?.copyWith(
+        fontSize: 17,
+        height: 1.45,
+      ),
+      bodyMedium: baseText.bodyMedium?.copyWith(
+        fontSize: 15,
+        height: 1.45,
+      ),
       labelLarge: baseText.labelLarge?.copyWith(
         fontWeight: FontWeight.w600,
         letterSpacing: 0.2,
+        fontSize: 15,
+      ),
+      labelMedium: baseText.labelMedium?.copyWith(
+        fontSize: AppTypography.minLabel,
+        height: 1.25,
+        fontWeight: FontWeight.w600,
+      ),
+      labelSmall: baseText.labelSmall?.copyWith(
+        fontSize: AppTypography.minCaption,
+        height: 1.25,
+        fontWeight: FontWeight.w600,
+      ),
+      bodySmall: baseText.bodySmall?.copyWith(
+        fontSize: AppTypography.minBodySecondary,
+        height: 1.35,
       ),
     );
 
@@ -98,12 +122,12 @@ class SimTheme {
       splashFactory: InkSparkle.splashFactory,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: ZoomPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.android: AppPageTransitionsBuilder(),
+          TargetPlatform.iOS: AppPageTransitionsBuilder(),
+          TargetPlatform.macOS: AppPageTransitionsBuilder(),
+          TargetPlatform.linux: AppPageTransitionsBuilder(),
+          TargetPlatform.windows: AppPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: AppPageTransitionsBuilder(),
         },
       ),
       appBarTheme: AppBarTheme(
@@ -134,36 +158,30 @@ class SimTheme {
         clipBehavior: Clip.antiAlias,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 68,
+        height: 72,
         elevation: 0,
         backgroundColor: colorScheme.surface.withValues(alpha: 0.92),
         surfaceTintColor: Colors.transparent,
         indicatorColor: colorScheme.primary.withValues(alpha: 0.18),
         indicatorShape: RoundedRectangleBorder(borderRadius: navIndicator),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return textTheme.labelMedium?.copyWith(
-              fontSize: 10,
-              height: 1.05,
-              fontWeight: FontWeight.w400,
-              letterSpacing: -0.18,
-              color: colorScheme.primary,
-            );
-          }
-          return textTheme.labelMedium?.copyWith(
-            fontSize: 10,
-            height: 1.05,
-            fontWeight: FontWeight.w400,
-            letterSpacing: -0.18,
-            color: colorScheme.onSurfaceVariant,
+          final base = textTheme.labelMedium?.copyWith(
+            fontSize: AppTypography.navBarLabel,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
           );
+          if (states.contains(WidgetState.selected)) {
+            return base?.copyWith(color: colorScheme.primary);
+          }
+          return base?.copyWith(color: colorScheme.onSurfaceVariant);
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return IconThemeData(size: 20, color: colorScheme.primary);
+            return IconThemeData(size: 24, color: colorScheme.primary);
           }
           return IconThemeData(
-            size: 20,
+            size: 24,
             color: colorScheme.onSurfaceVariant,
           );
         }),
@@ -290,11 +308,11 @@ class SimTheme {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        Color.lerp(accentColor, scaffoldMuted, 0.92)!,
+        const Color(0xFFE0E7FF),
         scaffoldMuted,
-        Color.lerp(primaryColor, scaffoldMuted, 0.94)!,
+        Color.lerp(primaryColor, const Color(0xFFF8FAFC), 0.9)!,
       ],
-      stops: const [0.0, 0.55, 1.0],
+      stops: const [0.0, 0.45, 1.0],
     );
   }
 }

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../core/widgets/sim_loading_indicator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -107,7 +109,7 @@ class _LinesPageState extends State<LinesPage> {
         const SizedBox(height: 16),
         Text(title,
             style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 12)),
+                fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 6),
         ...items.map((e) => InkWell(
               onTap: () async {
@@ -135,7 +137,7 @@ class _LinesPageState extends State<LinesPage> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-          body: Center(child: CircularProgressIndicator()));
+          body: const Center(child: SimLoadingIndicator()));
     }
 
     if (error.isNotEmpty) {

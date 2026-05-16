@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/widgets/sim_loading_indicator.dart';
+
 import '../core/theme/sim_theme.dart';
 import '../models/mobile_models.dart';
 import '../services/mobile_api_service.dart';
@@ -149,7 +151,7 @@ class _UsuarioDetailPageState extends State<UsuarioDetailPage>
         ),
         Expanded(
           child: _loadingProfile
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SimLoadingIndicator())
               : _error != null
                   ? Center(child: Text(_error!))
                   : TabBarView(
@@ -242,7 +244,7 @@ class _UsuarioDetailPageState extends State<UsuarioDetailPage>
         const SizedBox(height: 16),
         const Text(
           'Solo consulta. Para editar, use SIM en el navegador.',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
+          style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
       ],
     );
@@ -275,7 +277,7 @@ class _UsuarioDetailPageState extends State<UsuarioDetailPage>
 
   Widget _buildListTab(List<Widget> tiles) {
     if (_loadingTab && _tabController.index != 0) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: SimLoadingIndicator());
     }
     if (tiles.isEmpty) {
       return const Center(child: Text('Sin registros'));
@@ -348,7 +350,7 @@ class _UsuarioDetailPageState extends State<UsuarioDetailPage>
         ),
         Expanded(
           child: _loadingTab
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: SimLoadingIndicator())
               : _tasks.isEmpty
                   ? const Center(child: Text('Sin tareas'))
                   : ListView.builder(
