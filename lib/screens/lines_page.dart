@@ -4,19 +4,22 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../core/widgets/audit_item_title.dart';
+import '../core/widgets/audit_verification_status_badge.dart';
 import '../core/widgets/sim_loading_indicator.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
+import '../services/session_service.dart';
 import '../util/file_bytes.dart';
+import 'audit_check_item_verify_page.dart';
+import 'hallazgos_detail_page.dart';
 
 class LinesPage extends StatefulWidget {
   final Map<String, dynamic> plan;
-  final Map<String, dynamic> company;
 
-  const LinesPage({super.key, required this.plan, required this.company});
+  const LinesPage({super.key, required this.plan});
 
   @override
   State<LinesPage> createState() => _LinesPageState();
@@ -28,16 +31,20 @@ class _LinesPageState extends State<LinesPage> {
   bool isLoading = true;
   String error = '';
 
+  bool get _hasChecklist {
+    final grouped = planFull?['check_items_grouped'] as List?;
+    if (grouped != null && grouped.isNotEmpty) return true;
+    final flat = planFull?['check_items'] as List?;
+    return flat != null && flat.isNotEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
     fetchPlanFull();
   }
 
-  Future<String?> _token() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
+  Future<String?> _token() => SessionService.getToken();
 
   Future<void> fetchPlanFull() async {
     setState(() {
@@ -45,16 +52,19 @@ class _LinesPageState extends State<LinesPage> {
       error = '';
     });
 
-    final token = await _token();
-    if (token == null) return;
+    final headers = await SessionService.authCompanyHeaders();
+    if (headers == null) {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          error = 'Seleccione una organización para continuar.';
+        });
+      }
+      return;
+    }
 
     final url =
         '${ApiConfig.baseUrl}/api/v1/plans/${widget.plan['id']}/full/';
-
-    final headers = {
-      'Authorization': 'Bearer $token',
-      'X-Company-ID': widget.company['id'].toString(),
-    };
 
     try {
       final response = await http.get(Uri.parse(url), headers: headers);
@@ -78,6 +88,157 @@ class _LinesPageState extends State<LinesPage> {
     setState(() => isLoading = false);
   }
 
+  Future<void> _openCheckItem(Map<String, dynamic> item) async {
+    final token = await _token();
+    if (token == null || !mounted) return;
+
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AuditCheckItemVerifyPage(
+          checkItemId: int.parse('${item['id']}'),
+        ),
+      ),
+    );
+    if (saved == true) {
+      await fetchPlanFull();
+    }
+  }
+
+  Widget _statusBadge(Map<String, dynamic> item) {
+    final status = int.tryParse('${item['status']}') ?? 0;
+    final ncIds = List<int>.from(
+      (item['nc_ids'] as List?)?.map((e) => int.parse('$e')) ?? const [],
+    );
+    return AuditVerificationStatusBadge(
+      status: status,
+      ncIds: ncIds,
+      onNcTap: status == 2 && ncIds.isNotEmpty
+          ? () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HallazgosDetailPage(ncId: ncIds.first),
+                ),
+              );
+            }
+          : null,
+    );
+  }
+
+  Widget _buildChecklistRow(
+    Map<String, dynamic> item, {
+    String? topic,
+  }) {
+    final titleWidget = buildAuditItemTitle(context, item);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openCheckItem(item),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (topic != null)
+                SizedBox(
+                  width: 88,
+                  child: Text(
+                    topic,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                  ),
+                ),
+              Expanded(child: titleWidget),
+              const SizedBox(width: 8),
+              _statusBadge(item),
+              const Icon(Icons.chevron_right, size: 20, color: Colors.black38),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCheckItems() {
+    final grouped =
+        List<Map<String, dynamic>>.from(planFull?['check_items_grouped'] ?? []);
+    final flat =
+        List<Map<String, dynamic>>.from(planFull?['check_items'] ?? []);
+
+    if (grouped.isEmpty && flat.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final progress = planFull?['check_progress'] as Map<String, dynamic>?;
+    final done = progress?['done'] ?? 0;
+    final total = progress?['total'] ?? flat.length;
+
+    final rows = <Widget>[];
+
+    if (grouped.isNotEmpty) {
+      for (final group in grouped) {
+        final topic = group['scope_kind_label']?.toString() ?? '';
+        final items =
+            List<Map<String, dynamic>>.from(group['items'] ?? []);
+        for (var i = 0; i < items.length; i++) {
+          rows.add(
+            _buildChecklistRow(
+              items[i],
+              topic: i == 0 ? topic : null,
+            ),
+          );
+          if (i < items.length - 1) {
+            rows.add(const Divider(height: 1));
+          }
+        }
+        rows.add(const Divider(height: 16));
+      }
+    } else {
+      for (var i = 0; i < flat.length; i++) {
+        rows.add(_buildChecklistRow(flat[i]));
+        if (i < flat.length - 1) {
+          rows.add(const Divider(height: 1));
+        }
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Verificación ($done/$total)',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Toque cada punto para registrar evidencia y resultado.',
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(children: rows),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Future<void> _showLineEditor({Map<String, dynamic>? line}) async {
     if (mounted) {
       ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
@@ -86,10 +247,8 @@ class _LinesPageState extends State<LinesPage> {
       context: context,
       builder: (dialogContext) => LineEvidenceEditorDialog(
         planId: int.parse(widget.plan['id'].toString()),
-        company: widget.company,
         existingLine: line,
         fetchPlanFull: fetchPlanFull,
-        getToken: _token,
         onParentSnack: (message) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -137,7 +296,7 @@ class _LinesPageState extends State<LinesPage> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(
-          body: const Center(child: SimLoadingIndicator()));
+          body: Center(child: SimLoadingIndicator()));
     }
 
     if (error.isNotEmpty) {
@@ -159,73 +318,78 @@ class _LinesPageState extends State<LinesPage> {
           maxLines: 2,
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showLineEditor(),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _hasChecklist
+          ? null
+          : FloatingActionButton(
+              onPressed: () => _showLineEditor(),
+              child: const Icon(Icons.add),
+            ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            buildTopics("Customers", planFull?['customers'] ?? []),
-            buildTopics("Assets", planFull?['assets'] ?? []),
-            buildTopics("Documents", planFull?['documents'] ?? []),
-            buildTopics("Kpis", planFull?['kpis'] ?? []),
-            buildTopics("Minutes", planFull?['minutes'] ?? []),
-            buildTopics("Nc", planFull?['ncs'] ?? []),
-            buildTopics("Normativa", planFull?['complys'] ?? []),
-            buildTopics("Comités", planFull?['committees'] ?? []),
-            buildTopics("Objetivos", planFull?['objectives'] ?? []),
-            buildTopics("Oportunidades", planFull?['opportunitys'] ?? []),
-            buildTopics("Proyectos", planFull?['projects'] ?? []),
-            buildTopics("Cargos", planFull?['positions'] ?? []),
-            buildTopics("Procesos", planFull?['processs'] ?? []),
-            buildTopics("Repositorios", planFull?['repositorys'] ?? []),
-            buildTopics("Riesgos", planFull?['risks'] ?? []),
-            buildTopics("Proveedores", planFull?['suppliers'] ?? []),
-            buildTopics("Checlist", planFull?['checklists'] ?? []),
-            buildTopics("Ítems", planFull?['items'] ?? []),
-            buildTopics("Cambios", planFull?['changes'] ?? []),
-            buildTopics("Capacitación", planFull?['trainings'] ?? []),
-            buildTopics("Revisión Gerencia", planFull?['reviews'] ?? []),
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 10),
-            const Text("Lines",
-                style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            ...lines.map((line) {
-              final attachments =
-                  List<Map<String, dynamic>>.from(line['attach_files'] ?? []);
+            _buildCheckItems(),
+            if (!_hasChecklist) ...[
+              buildTopics("Customers", planFull?['customers'] ?? []),
+              buildTopics("Assets", planFull?['assets'] ?? []),
+              buildTopics("Documents", planFull?['documents'] ?? []),
+              buildTopics("Kpis", planFull?['kpis'] ?? []),
+              buildTopics("Minutes", planFull?['minutes'] ?? []),
+              buildTopics("Nc", planFull?['ncs'] ?? []),
+              buildTopics("Normativa", planFull?['complys'] ?? []),
+              buildTopics("Comités", planFull?['committees'] ?? []),
+              buildTopics("Objetivos", planFull?['objectives'] ?? []),
+              buildTopics("Oportunidades", planFull?['opportunitys'] ?? []),
+              buildTopics("Proyectos", planFull?['projects'] ?? []),
+              buildTopics("Cargos", planFull?['positions'] ?? []),
+              buildTopics("Procesos", planFull?['processs'] ?? []),
+              buildTopics("Repositorios", planFull?['repositorys'] ?? []),
+              buildTopics("Riesgos", planFull?['risks'] ?? []),
+              buildTopics("Proveedores", planFull?['suppliers'] ?? []),
+              buildTopics("Checlist", planFull?['checklists'] ?? []),
+              buildTopics("Ítems", planFull?['items'] ?? []),
+              buildTopics("Cambios", planFull?['changes'] ?? []),
+              buildTopics("Capacitación", planFull?['trainings'] ?? []),
+              buildTopics("Revisión Gerencia", planFull?['reviews'] ?? []),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 10),
+              const Text("Lines",
+                  style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              ...lines.map((line) {
+                final attachments =
+                    List<Map<String, dynamic>>.from(line['attach_files'] ?? []);
 
-              return Card(
-                child: ListTile(
-                  title: Text(line['name'] ?? 'Line ${line['id']}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (attachments.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(Icons.insert_drive_file),
-                          onPressed: () async {
-                            final fileUrl = attachments.first['attach_file'];
-                            if (fileUrl != null) {
-                              final uri = Uri.parse(fileUrl);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri);
+                return Card(
+                  child: ListTile(
+                    title: Text(line['name'] ?? 'Line ${line['id']}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (attachments.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.insert_drive_file),
+                            onPressed: () async {
+                              final fileUrl = attachments.first['attach_file'];
+                              if (fileUrl != null) {
+                                final uri = Uri.parse(fileUrl);
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri);
+                                }
                               }
-                            }
-                          },
-                        ),
-                      const Icon(Icons.edit),
-                    ],
+                            },
+                          ),
+                        const Icon(Icons.edit),
+                      ],
+                    ),
+                    onTap: () => _showLineEditor(line: line),
                   ),
-                  onTap: () => _showLineEditor(line: line),
-                ),
-              );
-            })
+                );
+              }),
+            ],
           ],
         ),
       ),
@@ -233,24 +397,19 @@ class _LinesPageState extends State<LinesPage> {
   }
 }
 
-/// Evidencia de auditoría: permite **subir archivos sin escribir texto antes**
-/// (se crea la línea en el servidor al elegir archivos si aún no existe).
+/// Evidencia libre (planes sin checklist de verificación).
 class LineEvidenceEditorDialog extends StatefulWidget {
   const LineEvidenceEditorDialog({
     super.key,
     required this.planId,
-    required this.company,
     required this.fetchPlanFull,
-    required this.getToken,
     required this.onParentSnack,
     this.existingLine,
   });
 
   final int planId;
-  final Map<String, dynamic> company;
   final Map<String, dynamic>? existingLine;
   final Future<void> Function() fetchPlanFull;
-  final Future<String?> Function() getToken;
   final void Function(String message) onParentSnack;
 
   @override
@@ -289,24 +448,23 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
     return t;
   }
 
-  /// Devuelve el id creado, o `null` y un mensaje legible del servidor si falla.
   Future<({int? id, String? errorHint})> _createLineApi(
-    String token,
+    Map<String, String> headers,
     String evidence,
   ) async {
     final url = '${ApiConfig.baseUrl}/api/v1/lines/';
-    final body = jsonEncode({
+    final bodyMap = <String, dynamic>{
       'plan': widget.planId,
       'name': evidence,
-    });
+    };
+    final body = jsonEncode(bodyMap);
     try {
       final response = await http
           .post(
             Uri.parse(url),
             headers: {
-              'Authorization': 'Bearer $token',
+              ...headers,
               'Content-Type': 'application/json',
-              'X-Company-ID': widget.company['id'].toString(),
             },
             body: body,
           )
@@ -351,7 +509,7 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
   }
 
   Future<bool> _uploadSingleFile({
-    required String token,
+    required Map<String, String> headers,
     required int lineId,
     required String fileName,
     required Uint8List bytes,
@@ -360,8 +518,7 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
       'POST',
       Uri.parse('${ApiConfig.baseUrl}/api/v1/lines/upload/'),
     );
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['X-Company-ID'] = widget.company['id'].toString();
+    request.headers.addAll(headers);
     request.fields['line'] = lineId.toString();
     request.files.add(
       http.MultipartFile.fromBytes(
@@ -391,11 +548,11 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
     );
     if (result == null || result.files.isEmpty) return;
 
-    final token = await widget.getToken();
+    final headers = await SessionService.authCompanyHeaders();
     if (!mounted) return;
-    if (token == null) {
+    if (headers == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sesión no válida')),
+        const SnackBar(content: Text('Seleccione una organización para continuar.')),
       );
       return;
     }
@@ -451,7 +608,7 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
           ? trimmed
           : _defaultEvidenceLabelFromFileName(resolved.first.name);
 
-      final created = await _createLineApi(token, evidenceLabel);
+      final created = await _createLineApi(headers, evidenceLabel);
       if (!mounted) return;
       final createdId = created.id;
       if (createdId == null) {
@@ -481,7 +638,7 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
     var anyFailed = false;
     for (final f in resolved) {
       final ok = await _uploadSingleFile(
-        token: token,
+        headers: headers,
         lineId: lineIdToUse,
         fileName: f.name,
         bytes: f.bytes,
@@ -526,11 +683,11 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
       return;
     }
 
-    final token = await widget.getToken();
+    final headers = await SessionService.authCompanyHeaders();
     if (!mounted) return;
-    if (token == null) {
+    if (headers == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sesión no válida')),
+        const SnackBar(content: Text('Seleccione una organización para continuar.')),
       );
       return;
     }
@@ -547,18 +704,16 @@ class _LineEvidenceEditorDialogState extends State<LineEvidenceEditorDialog> {
             ? http.put(
                 Uri.parse(url),
                 headers: {
-                  'Authorization': 'Bearer $token',
+                  ...headers,
                   'Content-Type': 'application/json',
-                  'X-Company-ID': widget.company['id'].toString(),
                 },
                 body: body,
               )
             : http.post(
                 Uri.parse(url),
                 headers: {
-                  'Authorization': 'Bearer $token',
+                  ...headers,
                   'Content-Type': 'application/json',
-                  'X-Company-ID': widget.company['id'].toString(),
                 },
                 body: body,
               ))

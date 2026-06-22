@@ -67,4 +67,17 @@ class SessionService {
       await prefs.remove(_companyLogoKey);
     }
   }
+
+  /// Token + empresa activa en sesión (misma fuente que el resto de la app).
+  static Future<Map<String, String>?> authCompanyHeaders() async {
+    final token = await getToken();
+    final companyId = await getCompanyId();
+    if (token == null || token.isEmpty || companyId == null) {
+      return null;
+    }
+    return {
+      'Authorization': 'Bearer $token',
+      'X-Company-ID': companyId.toString(),
+    };
+  }
 }

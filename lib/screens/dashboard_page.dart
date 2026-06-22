@@ -252,6 +252,13 @@ class _DashboardPageState extends State<DashboardPage> {
                 case ViewLevel.companies:
                   selectedCompany = item;
                   currentLevel = ViewLevel.audits;
+                  final companyId = int.tryParse('${item['id']}');
+                  if (companyId != null) {
+                    SessionService.setCompany(
+                      companyId,
+                      item['name']?.toString() ?? 'Organización',
+                    );
+                  }
                   break;
                 case ViewLevel.audits:
                   selectedAudit = item;
@@ -264,7 +271,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     MaterialPageRoute(
                       builder: (_) => LinesPage(
                         plan: selectedPlan!,
-                        company: selectedCompany!,
                       ),
                     ),
                   );
