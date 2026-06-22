@@ -98,12 +98,12 @@ workflows:
           # Firma release si en Codemagic (grupo group) están CM_KEYSTORE*, CM_KEY_ALIAS, etc.
           if [ -n "${CM_KEYSTORE:-}" ]; then
             echo "$CM_KEYSTORE" | base64 --decode > "$CM_BUILD_DIR/upload-keystore.jks"
-            cat > android/key.properties <<EOF
-          storePassword=$CM_KEYSTORE_PASSWORD
-          keyPassword=$CM_KEY_PASSWORD
-          keyAlias=$CM_KEY_ALIAS
-          storeFile=$CM_BUILD_DIR/upload-keystore.jks
-          EOF
+            printf '%s\n' \
+              "storePassword=$CM_KEYSTORE_PASSWORD" \
+              "keyPassword=$CM_KEY_PASSWORD" \
+              "keyAlias=$CM_KEY_ALIAS" \
+              "storeFile=$CM_BUILD_DIR/upload-keystore.jks" \
+              > android/key.properties
           fi
           flutter build apk --release
           ls -lah build/app/outputs/flutter-apk/
