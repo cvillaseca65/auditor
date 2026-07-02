@@ -48,3 +48,8 @@ app.*.map.json
 /android/key.properties
 /android/*.jks
 /android/*.keystore
+/android/KEYSTORE_CREDENTIALS.txt
+
+# SDK local de Android (no va al repo)
+.android-sdk/
+build-appbundle.log
