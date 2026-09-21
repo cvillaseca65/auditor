@@ -7,6 +7,8 @@ import '../core/widgets/audit_verification_status_badge.dart';
 import '../core/widgets/mobile_detail/detail_attachments_section.dart';
 import '../core/widgets/sim_loading_indicator.dart';
 import '../services/audit_verification_service.dart';
+import '../services/offline/audit_offline_store.dart';
+import '../services/offline/audit_sync_service.dart';
 import '../services/session_service.dart';
 import '../util/file_bytes.dart';
 import '../util/session_nav.dart';
@@ -18,9 +20,11 @@ class AuditCheckItemVerifyPage extends StatefulWidget {
   const AuditCheckItemVerifyPage({
     super.key,
     required this.checkItemId,
+    this.planId,
   });
 
   final int checkItemId;
+  final int? planId;
 
   @override
   State<AuditCheckItemVerifyPage> createState() =>
@@ -69,7 +73,37 @@ class _AuditCheckItemVerifyPageState extends State<AuditCheckItemVerifyPage> {
         });
         return;
       }
-      final data = await api.fetchDetail(widget.checkItemId);
+
+      final online = await AuditSyncService.instance.isOnline();
+      Map<String, dynamic>? data;
+      if (online) {
+        try {
+          data = await api.fetchDetail(widget.checkItemId);
+        } catch (_) {
+          data = null;
+        }
+      }
+      if (data == null) {
+        final companyId = await SessionService.getCompanyId();
+        final planId = widget.planId;
+        if (companyId != null && planId != null) {
+          data = await AuditOfflineStore.instance.getCheckItemDetail(
+            companyId,
+            planId,
+            widget.checkItemId,
+          );
+        }
+      }
+      if (data == null) {
+        setState(() {
+          _error = online
+              ? 'No se pudo cargar el punto.'
+              : 'Sin datos offline de este punto. Descargue el plan con conexión.';
+          _loading = false;
+        });
+        return;
+      }
+
       if (!mounted) return;
       final line = data['line'] as Map<String, dynamic>?;
       _evidence.text = stripHtml(line?['evidence']?.toString());
@@ -149,6 +183,45 @@ class _AuditCheckItemVerifyPageState extends State<AuditCheckItemVerifyPage> {
 
     setState(() => _saving = true);
     try {
+      final companyId = await SessionService.getCompanyId();
+      final planId = widget.planId;
+      final online = await AuditSyncService.instance.isOnline();
+
+      if (!online) {
+        if (companyId == null || planId == null) {
+          throw StateError(
+            'Descargue el plan con conexión antes de auditar offline.',
+          );
+        }
+        await AuditOfflineStore.instance.enqueueCheckItemVerify(
+          companyId: companyId,
+          planId: planId,
+          checkItemId: widget.checkItemId,
+          status: status,
+          evidence: _evidence.text.trim(),
+          ncFinding: ncFinding,
+          uploads: _pendingUploads
+              .map(
+                (u) => (
+                  name: u.name,
+                  bytes: u.bytes,
+                  description: u.description,
+                ),
+              )
+              .toList(),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Guardado offline. Se sincronizará al recuperar conexión.',
+            ),
+          ),
+        );
+        Navigator.of(context).pop(true);
+        return;
+      }
+
       final api = await _service();
       if (!mounted) return;
       if (api == null) {
@@ -182,6 +255,39 @@ class _AuditCheckItemVerifyPageState extends State<AuditCheckItemVerifyPage> {
         await navigateToLogin(context);
         return;
       }
+      // Network-ish failure while "online": queue for later if we have plan context.
+      final companyId = await SessionService.getCompanyId();
+      final planId = widget.planId;
+      if (companyId != null && planId != null && e.statusCode != 400) {
+        await AuditOfflineStore.instance.enqueueCheckItemVerify(
+          companyId: companyId,
+          planId: planId,
+          checkItemId: widget.checkItemId,
+          status: status,
+          evidence: _evidence.text.trim(),
+          ncFinding: ncFinding,
+          uploads: _pendingUploads
+              .map(
+                (u) => (
+                  name: u.name,
+                  bytes: u.bytes,
+                  description: u.description,
+                ),
+              )
+              .toList(),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No se pudo enviar (${e.message}). Quedó en cola offline.',
+            ),
+          ),
+        );
+        Navigator.of(context).pop(true);
+        return;
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );

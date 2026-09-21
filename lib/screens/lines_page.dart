@@ -11,6 +11,9 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
+import '../services/audit_verification_service.dart';
+import '../services/offline/audit_offline_store.dart';
+import '../services/offline/audit_sync_service.dart';
 import '../services/session_service.dart';
 import '../util/file_bytes.dart';
 import 'audit_check_item_verify_page.dart';
@@ -30,6 +33,9 @@ class _LinesPageState extends State<LinesPage> {
   List<Map<String, dynamic>> lines = [];
   bool isLoading = true;
   String error = '';
+  bool _fromCache = false;
+  bool _downloading = false;
+  int _pendingSync = 0;
 
   bool get _hasChecklist {
     final grouped = planFull?['check_items_grouped'] as List?;
@@ -37,6 +43,8 @@ class _LinesPageState extends State<LinesPage> {
     final flat = planFull?['check_items'] as List?;
     return flat != null && flat.isNotEmpty;
   }
+
+  int get _planId => int.parse('${widget.plan['id']}');
 
   @override
   void initState() {
@@ -46,7 +54,12 @@ class _LinesPageState extends State<LinesPage> {
 
   Future<String?> _token() => SessionService.getToken();
 
-  Future<void> fetchPlanFull() async {
+  Future<void> _refreshPending() async {
+    final n = await AuditOfflineStore.instance.pendingCount();
+    if (mounted) setState(() => _pendingSync = n);
+  }
+
+  Future<void> fetchPlanFull({bool forceOnline = false}) async {
     setState(() {
       isLoading = true;
       error = '';
@@ -63,29 +76,116 @@ class _LinesPageState extends State<LinesPage> {
       return;
     }
 
-    final url =
-        '${ApiConfig.baseUrl}/api/v1/plans/${widget.plan['id']}/full/';
+    final companyId = int.parse(headers['X-Company-ID']!);
+    final online = await AuditSyncService.instance.isOnline();
+    final url = '${ApiConfig.baseUrl}/api/v1/plans/$_planId/full/';
 
-    try {
-      final response = await http.get(Uri.parse(url), headers: headers);
+    if (online) {
+      try {
+        final response = await http
+            .get(Uri.parse(url), headers: headers)
+            .timeout(Duration(seconds: ApiConfig.timeoutSeconds));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        planFull = data;
-        lines = List<Map<String, dynamic>>.from(data['lines'] ?? []);
-        lines.sort((a, b) {
-          final na = '${a['name'] ?? ''}'.toLowerCase();
-          final nb = '${b['name'] ?? ''}'.toLowerCase();
-          return na.compareTo(nb);
-        });
-      } else {
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          planFull = data;
+          lines = List<Map<String, dynamic>>.from(data['lines'] ?? []);
+          lines.sort((a, b) {
+            final na = '${a['name'] ?? ''}'.toLowerCase();
+            final nb = '${b['name'] ?? ''}'.toLowerCase();
+            return na.compareTo(nb);
+          });
+          _fromCache = false;
+          await AuditOfflineStore.instance.savePlanFull(
+            companyId: companyId,
+            planId: _planId,
+            planFull: data,
+          );
+          await AuditSyncService.instance.flushOutbox();
+          await _refreshPending();
+          if (mounted) setState(() => isLoading = false);
+          return;
+        }
         error = 'Error ${response.statusCode}';
+      } catch (e) {
+        error = 'Error de red: $e';
       }
-    } catch (e) {
-      error = 'Error fetching plan: $e';
     }
 
-    setState(() => isLoading = false);
+    final cached =
+        await AuditOfflineStore.instance.getPlanFull(companyId, _planId);
+    if (cached != null) {
+      planFull = cached;
+      lines = List<Map<String, dynamic>>.from(cached['lines'] ?? []);
+      lines.sort((a, b) {
+        final na = '${a['name'] ?? ''}'.toLowerCase();
+        final nb = '${b['name'] ?? ''}'.toLowerCase();
+        return na.compareTo(nb);
+      });
+      _fromCache = true;
+      error = '';
+      await _refreshPending();
+      if (mounted) setState(() => isLoading = false);
+      return;
+    }
+
+    if (error.isEmpty) {
+      error = online
+          ? 'No se pudo cargar el plan.'
+          : 'Sin conexión y sin copia offline. Conéctese y pulse «Descargar para offline».';
+    }
+    if (mounted) setState(() => isLoading = false);
+  }
+
+  Future<void> _downloadForOffline() async {
+    if (_downloading) return;
+    setState(() => _downloading = true);
+    try {
+      final headers = await SessionService.authCompanyHeaders();
+      if (headers == null) {
+        throw StateError('Seleccione una organización para continuar.');
+      }
+      final token = headers['Authorization']!.replaceFirst('Bearer ', '');
+      final companyId = int.parse(headers['X-Company-ID']!);
+      final api = AuditVerificationService(token: token, companyId: companyId);
+
+      final data = await AuditSyncService.instance.downloadPlanForOffline(
+        planId: _planId,
+        fetchPlanFull: () async {
+          final response = await http
+              .get(
+                Uri.parse('${ApiConfig.baseUrl}/api/v1/plans/$_planId/full/'),
+                headers: headers,
+              )
+              .timeout(Duration(seconds: ApiConfig.timeoutSeconds));
+          if (response.statusCode != 200) {
+            throw StateError('Error ${response.statusCode}');
+          }
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        },
+        fetchCheckItemDetail: api.fetchDetail,
+      );
+      planFull = data;
+      lines = List<Map<String, dynamic>>.from(data['lines'] ?? []);
+      _fromCache = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Plan descargado. Puede auditar sin conexión; se sincronizará al recuperar red.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo descargar: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
   }
 
   Future<void> _openCheckItem(Map<String, dynamic> item) async {
@@ -97,11 +197,26 @@ class _LinesPageState extends State<LinesPage> {
       MaterialPageRoute(
         builder: (_) => AuditCheckItemVerifyPage(
           checkItemId: int.parse('${item['id']}'),
+          planId: _planId,
         ),
       ),
     );
     if (saved == true) {
       await fetchPlanFull();
+    } else {
+      await _refreshPending();
+      // Reload from cache if offline edits were queued.
+      final companyId = await SessionService.getCompanyId();
+      if (companyId != null) {
+        final cached =
+            await AuditOfflineStore.instance.getPlanFull(companyId, _planId);
+        if (cached != null && mounted) {
+          setState(() {
+            planFull = cached;
+            lines = List<Map<String, dynamic>>.from(cached['lines'] ?? []);
+          });
+        }
+      }
     }
   }
 
@@ -300,7 +415,25 @@ class _LinesPageState extends State<LinesPage> {
     }
 
     if (error.isNotEmpty) {
-      return Scaffold(body: Center(child: Text(error)));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Plan')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(error, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => fetchPlanFull(),
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     final auditedName = planFull?['audited']?['name']?.toString() ?? '';
@@ -317,6 +450,48 @@ class _LinesPageState extends State<LinesPage> {
           overflow: TextOverflow.ellipsis,
           maxLines: 2,
         ),
+        actions: [
+          if (_pendingSync > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Text(
+                  '$_pendingSync pend.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          IconButton(
+            tooltip: 'Descargar para offline',
+            onPressed: _downloading ? null : _downloadForOffline,
+            icon: _downloading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_for_offline_outlined),
+          ),
+          IconButton(
+            tooltip: 'Sincronizar',
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final n = await AuditSyncService.instance.flushOutbox();
+              await fetchPlanFull();
+              if (!mounted) return;
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    n > 0
+                        ? 'Sincronizados $n cambios pendientes.'
+                        : 'Nada pendiente por sincronizar.',
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.sync),
+          ),
+        ],
       ),
       floatingActionButton: _hasChecklist
           ? null
@@ -324,74 +499,95 @@ class _LinesPageState extends State<LinesPage> {
               onPressed: () => _showLineEditor(),
               child: const Icon(Icons.add),
             ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCheckItems(),
-            if (!_hasChecklist) ...[
-              buildTopics("Customers", planFull?['customers'] ?? []),
-              buildTopics("Assets", planFull?['assets'] ?? []),
-              buildTopics("Documents", planFull?['documents'] ?? []),
-              buildTopics("Kpis", planFull?['kpis'] ?? []),
-              buildTopics("Minutes", planFull?['minutes'] ?? []),
-              buildTopics("Nc", planFull?['ncs'] ?? []),
-              buildTopics("Normativa", planFull?['complys'] ?? []),
-              buildTopics("Comités", planFull?['committees'] ?? []),
-              buildTopics("Objetivos", planFull?['objectives'] ?? []),
-              buildTopics("Oportunidades", planFull?['opportunitys'] ?? []),
-              buildTopics("Proyectos", planFull?['projects'] ?? []),
-              buildTopics("Cargos", planFull?['positions'] ?? []),
-              buildTopics("Procesos", planFull?['processs'] ?? []),
-              buildTopics("Repositorios", planFull?['repositorys'] ?? []),
-              buildTopics("Riesgos", planFull?['risks'] ?? []),
-              buildTopics("Proveedores", planFull?['suppliers'] ?? []),
-              buildTopics("Checlist", planFull?['checklists'] ?? []),
-              buildTopics("Ítems", planFull?['items'] ?? []),
-              buildTopics("Cambios", planFull?['changes'] ?? []),
-              buildTopics("Capacitación", planFull?['trainings'] ?? []),
-              buildTopics("Revisión Gerencia", planFull?['reviews'] ?? []),
-              const SizedBox(height: 20),
-              const Divider(),
-              const SizedBox(height: 10),
-              const Text("Lines",
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              ...lines.map((line) {
-                final attachments =
-                    List<Map<String, dynamic>>.from(line['attach_files'] ?? []);
-
-                return Card(
-                  child: ListTile(
-                    title: Text(line['name'] ?? 'Line ${line['id']}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (attachments.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.insert_drive_file),
-                            onPressed: () async {
-                              final fileUrl = attachments.first['attach_file'];
-                              if (fileUrl != null) {
-                                final uri = Uri.parse(fileUrl);
-                                if (await canLaunchUrl(uri)) {
-                                  await launchUrl(uri);
-                                }
-                              }
-                            },
-                          ),
-                        const Icon(Icons.edit),
-                      ],
+      body: Column(
+        children: [
+          if (_fromCache)
+            Material(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: const ListTile(
+                dense: true,
+                leading: Icon(Icons.cloud_off, size: 20),
+                title: Text(
+                  'Modo offline (copia local del plan)',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCheckItems(),
+                  if (!_hasChecklist) ...[
+                    buildTopics("Customers", planFull?['customers'] ?? []),
+                    buildTopics("Assets", planFull?['assets'] ?? []),
+                    buildTopics("Documents", planFull?['documents'] ?? []),
+                    buildTopics("Kpis", planFull?['kpis'] ?? []),
+                    buildTopics("Minutes", planFull?['minutes'] ?? []),
+                    buildTopics("Nc", planFull?['ncs'] ?? []),
+                    buildTopics("Normativa", planFull?['complys'] ?? []),
+                    buildTopics("Comités", planFull?['committees'] ?? []),
+                    buildTopics("Objetivos", planFull?['objectives'] ?? []),
+                    buildTopics("Oportunidades", planFull?['opportunitys'] ?? []),
+                    buildTopics("Proyectos", planFull?['projects'] ?? []),
+                    buildTopics("Cargos", planFull?['positions'] ?? []),
+                    buildTopics("Procesos", planFull?['processs'] ?? []),
+                    buildTopics("Repositorios", planFull?['repositorys'] ?? []),
+                    buildTopics("Riesgos", planFull?['risks'] ?? []),
+                    buildTopics("Proveedores", planFull?['suppliers'] ?? []),
+                    buildTopics("Checlist", planFull?['checklists'] ?? []),
+                    buildTopics("Ítems", planFull?['items'] ?? []),
+                    buildTopics("Cambios", planFull?['changes'] ?? []),
+                    buildTopics("Capacitación", planFull?['trainings'] ?? []),
+                    buildTopics("Revisión Gerencia", planFull?['reviews'] ?? []),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Lines',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    onTap: () => _showLineEditor(line: line),
-                  ),
-                );
-              }),
-            ],
-          ],
-        ),
+                    const SizedBox(height: 10),
+                    ...lines.map((line) {
+                      final attachments = List<Map<String, dynamic>>.from(
+                        line['attach_files'] ?? [],
+                      );
+                      return Card(
+                        child: ListTile(
+                          title: Text(line['name'] ?? 'Line ${line['id']}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (attachments.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.insert_drive_file),
+                                  onPressed: () async {
+                                    final fileUrl =
+                                        attachments.first['attach_file'];
+                                    if (fileUrl != null) {
+                                      final uri = Uri.parse(fileUrl);
+                                      if (await canLaunchUrl(uri)) {
+                                        await launchUrl(uri);
+                                      }
+                                    }
+                                  },
+                                ),
+                              const Icon(Icons.edit),
+                            ],
+                          ),
+                          onTap: () => _showLineEditor(line: line),
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
